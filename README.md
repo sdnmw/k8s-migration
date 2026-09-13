@@ -1,43 +1,213 @@
 # SKS Migration Center
 
-SKS Migration Center 是面向 SmartX SKS 工作负载集群的 Kubernetes 与 Docker Compose 应用迁移工作台。产品规格位于 [`sks-migration-center-spec`](./sks-migration-center-spec)。
+SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用迁移平台，支持 Kubernetes Namespace/资源组合和 Docker Compose 应用迁移。平台只连接用户导入的源、目标环境，不操作 CAPI 管控集群，也不自动修改 DNS、负载均衡或外部防火墙。
 
-## 当前状态
+## 第一部分：离线部署指南
 
-可上线 v1 建设范围已完成。工程实现、Kubernetes 主链路、Docker Compose 主链路、平台本体真实部署和一次性 AMD64 离线发行验收均已通过。真实 `mw` 目标、`sida` 源集群 kubeconfig 及外部 Compose SSH 主机均已接入。现有能力包括 API/数据库契约、SmartX 风格管理界面、Kubernetes 与 Compose 源端发现、能力快照、Namespace Inventory、评估和 BLOCKER 门禁、资源映射、Transform Engine、六步向导、任务编排与 SSE、离线交付、默认 MinIO 或外部 S3、外部 NFS、Velero FSB、CSI Snapshot Data Mover、隔离 Kompose、Compose Kopia 卷迁移、目标业务验证、人工切流/回滚闭环、资源拓扑与离线 HTML 诊断报告。
+### 1. 准备条件
 
-平台现已部署在真实 `mw` SKS 工作负载集群：API、Worker、Web 和 PostgreSQL 4/4 Ready，PostgreSQL 使用 `smtx-elf-csi-driver` 的 20 GiB RWO PVC，NodePort 管理界面为 <http://192.168.118.206:31500>。管理员登录和会话 API 已通过真实链路验证；密码保存在本地 Git 忽略的 Secret 文件中，不写入文档。
+部署前需要准备：
 
-完整一次性离线包通过 GitHub Release 发布，不进入 Git 历史。发行包包含 16 个 `linux/amd64` OCI 镜像、全部 Helm Chart、静态 Linux AMD64 安装器和部署说明。解压后执行 `deploy.sh`，只需提供 Harbor 地址、项目、凭据文件和目标 SKS kubeconfig；详细参数见 [`离线部署说明`](./deploy/offline/README.md)。
+- 一台可以执行 Linux AMD64 二进制的部署终端；
+- 目标 SKS 工作负载集群的 kubeconfig；
+- 目标 Harbor 地址、项目名称和具有项目创建、镜像推送权限的账号；
+- 部署终端能够访问 Harbor 和目标集群 API；
+- 目标集群节点能够从 Harbor 拉取镜像；
+- 目标集群中可用的 SmartX ELF CSI RWO StorageClass，或明确指定其他 RWO StorageClass。
 
-窗口 17 已在真实 `mw` SKS 工作负载集群完成。单实例 MinIO 使用锁定官方镜像和 `smtx-elf-csi-driver` RWO PVC，已通过 TLS S3 写读、SHA-256 校验、StatefulSet 重启及重启后持久化校验。按一次性迁移工具的使用边界，官方 OSS 镜像的已知风险已显式接受。详见 [`窗口 17 报告`](./docs/progress/window-17.md)。
+完整离线包发布在 [GitHub Release v0.1.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.1.0)：
 
-窗口 18 已提供外部 NFS Profile、离线 NFS CSI 4.13.4 Chart、Harbor digest镜像配置、Retain StorageClass和 Web 管理入口。真实 `mw` 集群已创建 `sks-migration-nfs`，并通过动态 PVC 写入、卸载、独立 Pod重新挂载读取和清理验证。详见 [`窗口 18 报告`](./docs/progress/window-18.md)。
+- `sks-migration-center-0.1.0-linux-amd64.tar.gz`
+- `sks-migration-center-0.1.0-linux-amd64.tar.gz.sha256`
 
-窗口 19 已提供官方 Velero 1.18.1 Chart、AWS 插件 1.14.0、node-agent/Kopia、BSL与 Backup CR客户端、对象存储/Velero Web管理页及双 SKS验收入口。详见 [`窗口 19 报告`](./docs/progress/window-19.md)。
+归档包含 16 个 `linux/amd64` OCI 镜像、平台和 Add-on Helm Chart、镜像锁、静态安装器及校验清单。安装过程不访问公网，也不要求目标终端安装 Docker、Helm、Skopeo 或 Crane。
 
-窗口 20 的 Kubernetes FSB 执行内核已完成：在线预同步、未挂载 PVC staging、源端副本快照与停机、最终 Backup、目标 Backup 同步、Namespace/StorageClass 映射 Restore、目标副本恢复、完整资源验证、逐 PVC 进度和失败回滚均已接入 Worker。详见 [`窗口 20 进度`](./docs/progress/window-20.md)。
+### 2. 校验并解压
 
-窗口 21 已实现 CSI Snapshot/Data Mover能力矩阵、源 StorageClass与快照驱动精确匹配、DataUpload/DataDownload进度、Raw Block Linux门禁和 Worker实时复检。`mw` 只读探测确认 SmartX快照驱动、EnableCSI、DataUpload/DataDownload及 node-agent 2/2均可用；真实跨集群迁移尚未执行。详见 [`窗口 21 报告`](./docs/progress/window-21.md)。
+```bash
+sha256sum -c sks-migration-center-0.1.0-linux-amd64.tar.gz.sha256
 
-窗口 22 已完成 Compose 应用自动发现与手动注册、隔离 Kompose Job、Transform 映射、Worker 源类型分流、目标 Server-Side Apply 和就绪验证，并使用官方 Kompose 1.38.0 完成真实链路验证。详见 [`窗口 22 报告`](./docs/progress/window-22.md)。
+mkdir -p sks-migration-center-0.1.0
+tar -xzf sks-migration-center-0.1.0-linux-amd64.tar.gz \
+  -C sks-migration-center-0.1.0
+cd sks-migration-center-0.1.0
+```
 
-窗口 23 已完成 Compose named/bind volume 的 Kopia 在线预同步、停机最终快照、目标 PVC 恢复、目标副本启动和源端恢复闭环；官方 Kopia 0.23.1 已完成真实 Compose 主机到 `mw` 的快照恢复与数据校验。详见 [`窗口 23 报告`](./docs/progress/window-23.md)。
+当前发行归档 SHA-256 为：
 
-窗口 24 已完成 Workload/PVC/Service/Ingress 基础验证、目标集群内 HTTP/TCP 探测、人工切流确认、主动回滚、源端自动恢复和自包含 HTML 报告下载。详见 [`窗口 24 报告`](./docs/progress/window-24.md)。
+```text
+faa9fe0a22c457a9528a418899c9f9418a08be5a31bf7ad34d2385953224b5cb
+```
 
-窗口 25 已完成 API/Worker Prometheus 指标、报告摘要、终态 Velero 备份清理、受管 Velero 升级/卸载、平台与临时 Job 资源约束、NetworkPolicy 以及数据库短暂断连/租约丢失等故障回归。`sida` 只读探测确认 CSI Data Mover 上传路径已就绪。详见 [`窗口 25 报告`](./docs/progress/window-25.md)。
+### 3. 准备凭据文件
 
-窗口 26 已新增双 Kind/真实双集群控制 E2E、离线包 Ed25519 签名、现有 Velero 复用、角色化 BSL、Velero 1.13 PSA 兼容、并发安全的唯一 StorageClass 映射、正确的 DeleteBackupRequest 清理，以及完全由真实 API 驱动的迁移列表和概览。真实 `sida → mw` 已完成元数据、RWO SmartX 块 PVC 与 RWX NFS PVC 的 Velero FSB 迁移及文件校验；真实 Compose 主机也已通过 Kompose、Registry 映射、Kopia 增量同步、SmartX 块 PVC恢复和回滚验收。详见 [`窗口 26 报告`](./docs/progress/window-26.md)。
+Harbor 用户名和密码通过文件传入，避免出现在进程参数和 Shell 历史中：
 
-## 本地要求
+```bash
+install -d -m 0700 /secure/sks-migration
+printf '%s' '<Harbor 用户名>' > /secure/sks-migration/harbor-username
+printf '%s' '<Harbor 密码>' > /secure/sks-migration/harbor-password
+install -m 0600 /path/to/target-sks.yaml /secure/sks-migration/target-sks.yaml
+chmod 0600 /secure/sks-migration/harbor-username \
+  /secure/sks-migration/harbor-password
+```
 
-- Docker 24+
-- Docker Compose v2
-- 可选：Node.js 22+，用于不经容器运行前端命令
-- Go 不要求安装在宿主机；`make` 默认通过固定版本容器执行 Go 命令
+### 4. 一键部署
 
-## 快速开始
+```bash
+./deploy.sh \
+  --harbor-address https://harbor.example.com \
+  --harbor-project sks-migration \
+  --harbor-username-file /secure/sks-migration/harbor-username \
+  --harbor-password-file /secure/sks-migration/harbor-password \
+  --sks-kubeconfig /secure/sks-migration/target-sks.yaml
+```
+
+安装器会依次完成：
+
+1. 校验归档文件清单、镜像锁和 OCI descriptor；
+2. 创建或复用 Harbor 项目，并导入全部 digest 固定的 AMD64 镜像；
+3. 发现目标集群的 SmartX ELF CSI StorageClass；
+4. 创建平台 Namespace、imagePullSecret 和应用 Secret；
+5. 部署 PostgreSQL、API、Worker 和 Web；
+6. 默认部署单实例 MinIO，并把它登记为平台已有对象存储；
+7. 输出管理界面地址、首次管理员密码和默认 MinIO S3 Endpoint。
+
+常用可选参数：
+
+| 参数 | 用途 |
+| --- | --- |
+| `--storage-class <name>` | 不使用自动发现结果，明确指定平台和 MinIO 的 RWO StorageClass |
+| `--minio-storage-size <size>` | 设置默认 MinIO PVC 容量，默认 `100Gi` |
+| `--skip-default-minio` | 不部署默认 MinIO，安装后在界面中对接其他 S3 |
+| `--namespace <name>` | 修改平台 Namespace，默认 `sks-migration-center` |
+| `--admin-password-file <file>` | 使用指定的管理员初始密码；省略时自动生成 |
+| `--master-key-file <file>` | 使用指定的 32 字节 Base64 主密钥；省略时自动生成 |
+| `--cookie-secure` | 平台通过 HTTPS 暴露时为登录 Cookie 启用 Secure 属性 |
+| `--insecure-registry` | 仅在可信实验环境中允许 HTTP Harbor 或跳过 Harbor TLS 校验 |
+
+如果部署时跳过默认 MinIO，进入“系统设置 → 对象存储”，选择“对接其他 S3”；需要平台再管理一个独立实例时选择“新增 MinIO”。重复执行同一 `deploy.sh` 会复用现有 Secret、对象存储登记和持久化数据，并通过内置 Helm SDK 执行升级。
+
+### 5. 安装后检查
+
+```bash
+kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
+  -n sks-migration-center get pod,pvc,svc
+
+kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
+  -n sks-migration-center rollout status deployment/sks-migration-center-api
+
+kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
+  -n sks-migration-center rollout status deployment/sks-migration-center-worker
+
+kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
+  -n sks-migration-center rollout status deployment/sks-migration-center-web
+```
+
+更完整的离线包组装、Harbor 导入、对象存储和升级说明见 [`deploy/offline/README.md`](./deploy/offline/README.md)，迁移故障处理见 [`docs/operations/migration-failure-lessons.md`](./docs/operations/migration-failure-lessons.md)。
+
+## 第二部分：迁移逻辑
+
+### 1. 平台迁移时序
+
+创建迁移时，用户依次选择源环境、源应用或资源组合、目标 SKS、资源映射、迁移策略和验证策略。Assessment 中存在未解决的 BLOCKER 时不能创建迁移计划。
+
+每次 Migration Run 固定执行以下步骤，界面的“执行时序”与这些状态一一对应：
+
+```text
+PREFLIGHT
+  → PRESYNC（启用预同步时）
+  → QUIESCE
+  → FINAL_BACKUP
+  → TRANSFER（存在卷数据时）
+  → TRANSFORM
+  → RESTORE
+  → VALIDATION
+  → AWAIT_CUTOVER
+  → COMPLETED
+```
+
+| 平台步骤 | 实际动作 |
+| ---|---|
+| `PREFLIGHT` 执行前检查 | 重新检查源、目标、对象存储、容量、镜像、映射和迁移组件；发现 BLOCKER 立即停止 |
+| `PRESYNC` 在线预同步 | 在源业务仍运行时先复制大部分卷数据，缩短最终停机窗口 |
+| `QUIESCE` 停止源业务 | 记录源工作负载状态后停止有状态源业务；无卷迁移不会停止源端 |
+| `FINAL_BACKUP` 最终备份 | 源业务停止后执行增量备份，形成迁移使用的最终一致数据集 |
+| `TRANSFER` 数据传输 | 确认 Velero FSB、CSI Data Mover 或 Kopia 数据已写入目标可访问的对象存储 |
+| `TRANSFORM` 资源转换 | 固化目标期望资源，应用 Namespace、Image、StorageClass、IngressClass、NodeLabel 和 NFS 映射 |
+| `RESTORE` 目标恢复 | 在目标 Namespace 创建资源、恢复 PVC 数据，并启动目标工作负载 |
+| `VALIDATION` 业务验证 | 汇总全部 Deployment、StatefulSet、PVC、Service、Ingress、映射及 HTTP/TCP 检查结果 |
+| `AWAIT_CUTOVER` 等待人工切流 | 目标已经可用，但平台等待管理员完成外部 DNS/LB/防火墙切换并确认 |
+| `COMPLETED` 完成 | 固化源、转换、目标拓扑和迁移证据，可下载自包含 HTML 报告 |
+
+任务百分比只表示步骤执行进度，最终成功与否以逐资源验证和任务终态为准。任务详情中的资源拓扑、执行时序、数据迁移和任务信息会持续记录资源状态、映射变化、重试、心跳和错误原因。
+
+### 2. Kubernetes → SKS
+
+1. **发现应用**：平台可以按 Namespace 自动发现业务拓扑，也可以由用户在一个 Namespace 中手选 Deployment、StatefulSet、Service、Ingress、PVC、ConfigMap、Secret 等资源组合。创建 Run 时会固化 Inventory 和 MappingProfile，后续重新发现不会改写本次证据。
+2. **能力与兼容性评估**：检查 Kubernetes/API 版本、节点架构、StorageClass、CSI Driver、VolumeSnapshotClass、IngressClass、镜像和安全约束。文件系统卷默认使用 Velero FSB/Kopia；满足条件时可选择 CSI Snapshot Data Mover；不能安全处理的 raw block 卷会成为 BLOCKER。
+3. **预同步**：Velero 在源集群创建预同步 Backup。未挂载 PVC 会使用临时 staging Pod；node-agent 将卷数据写入目标集群可访问的 S3/MinIO。
+4. **停止源业务**：存在 PVC 时，平台保存所选 Deployment/StatefulSet 的副本数并缩容到 `0`。手选资源只停止迁移清单中的工作负载。没有 PVC 时不停止源业务，此步骤记录为无需停机。
+5. **最终备份和传输确认**：源端静止后创建最终 Backup，并等待 FSB/DataUpload 完成。源、目标 Velero 通过同一对象存储同步备份元数据。
+6. **转换与恢复**：恢复前应用 Namespace 和 StorageClass 映射；Velero Restore 完成后再对目标资源实际应用 Registry/Image、IngressClass、NodeLabel 和 NFS 等可变字段映射，并逐项确认映射已经生效。
+7. **验证**：平台等待工作负载 Ready、PVC Bound，检查 Service selector、Ingress 后端、ConfigMap/Secret/RBAC 存在性以及配置的 HTTP/TCP 探测。验证会收集所有资源结果，而不是遇到第一个错误就停止。
+8. **等待切流**：验证通过后进入 `AWAITING_CUTOVER`，由管理员在平台外修改 DNS、负载均衡或防火墙，再点击确认切流。
+
+### 3. Docker Compose → SKS
+
+1. **发现应用**：Compose 主机通过 SSH 导入。平台使用受控命令读取 `docker compose ls -a`，发现运行中和已停止的项目；也可以手动注册 compose 文件。平台解析 Service、镜像、端口、`depends_on`、网络、named volume、允许目录内的 bind mount、config、secret、`.env` 和 profiles。
+2. **预检与候选清单**：平台在目标集群的隔离 Job 中运行 Kompose，再经过 Assessment、Transform 和 Diff 生成候选 Kubernetes 清单。前端不会向 SSH 主机开放任意 Shell。
+3. **预同步**：存在 named volume 或允许的 bind mount 时，受控 Kopia 辅助容器在 Compose 仍运行期间把卷数据预同步到 S3/MinIO。无数据卷应用跳过实际数据传输。
+4. **停止源业务**：存在需迁移的数据卷时执行受控的 Compose stop，并记录停止事件。无卷应用保持运行。
+5. **最终同步**：源服务停止后对每个卷执行增量 Kopia Snapshot，确保迁移数据对应停机时刻的文件状态。平台保证正常停止后的文件级一致性，不提供数据库在线复制。
+6. **转换与恢复**：Compose Service 转换为 Deployment/Service，volume 或 bind mount 转换为 PVC，config/secret 转换为 ConfigMap/Secret；随后应用 Registry、StorageClass、Namespace 和 Ingress 等映射。平台先恢复 PVC 数据，再恢复工作负载副本。
+7. **验证与切流**：逐项检查生成的 Kubernetes 资源、PVC、服务端点及 HTTP/TCP 探测，通过后等待管理员人工切流确认。
+
+### 4. 失败、取消、重试和恢复源端
+
+- 在停止源业务之后、人工切流之前发生失败或取消时，平台进入 `ROLLING_BACK`：Kubernetes 恢复之前记录的副本数；Compose 执行受控的启动动作。目标资源默认保留，便于诊断。
+- “恢复源端”使用与自动回滚相同的幂等逻辑，也可以在迁移完成后使用；它只恢复源业务，不自动删除目标资源，也不会反向同步目标端后来产生的数据。
+- 没有 PVC/Compose 数据卷的任务不会停止源业务，因此恢复源端时会明确显示“无需恢复”。
+- 失败、取消或已完成任务可以“重新执行”，生成新的 Run 并保留旧 Run 的拓扑、事件和报告；需要调整选择、映射或策略时先“编辑任务”再重新执行。
+- 人工切流仅表示管理员已经在平台外完成访问入口切换。点击确认后任务才进入 `COMPLETED`，平台本身不会修改 DNS、负载均衡或防火墙。
+
+## 第三部分：项目目录说明
+
+| 路径 | 作用 |
+|---|---|
+| [`api/`](./api) | OpenAPI 契约；前后端请求、响应、错误码和核心 Schema 的唯一接口来源 |
+| [`cmd/server/`](./cmd/server) | Go API Server 入口，负责 HTTP API、登录会话、SSE、报告和依赖装配 |
+| [`cmd/worker/`](./cmd/worker) | 独立 Worker 入口，负责 PostgreSQL 任务租约、步骤执行、重试与心跳 |
+| [`cmd/offline/`](./cmd/offline) | 离线包 pack/verify/import/deploy/sign 命令和内置 Helm 部署逻辑 |
+| [`internal/domain/`](./internal/domain) | Environment、Application、Assessment、Mapping、Migration、Storage 等领域模型和状态机 |
+| [`internal/api/`](./internal/api) | REST/SSE Handler、错误响应和 HTML 迁移报告生成 |
+| [`internal/migration/`](./internal/migration) | MigrationPlan/Run 编排、Kubernetes/Compose 执行器、拓扑证据和故障诊断 |
+| [`internal/adapter/`](./internal/adapter) | Kubernetes、Velero、SSH 和 S3 外部系统适配器 |
+| [`internal/assessment/`](./internal/assessment) | 兼容性评估规则、评分、WARNING 和 BLOCKER 判定 |
+| [`internal/transform/`](./internal/transform) | Kubernetes 清单规范化、资源映射、字段改写和 YAML Diff |
+| [`internal/repository/`](./internal/repository) | Repository 接口及 PostgreSQL 实现，包括任务、事件、审计和拓扑快照 |
+| [`internal/database/`](./internal/database) | PostgreSQL 连接、迁移执行器和数据库 migration SQL |
+| [`internal/addon/`](./internal/addon) | MinIO、NFS CSI、Velero 等 Add-on 的 Helm SDK 管理 |
+| [`internal/security/`](./internal/security) | 密码哈希、envelope encryption 和敏感信息脱敏 |
+| [`internal/offline/`](./internal/offline) | 离线归档、OCI 镜像锁、Registry 导入、签名和完整性校验 |
+| [`internal/acceptance/`](./internal/acceptance) | 双集群、真实 SKS、MinIO、NFS、Velero 和 Compose 验收测试入口 |
+| [`web/`](./web) | React、TypeScript、Ant Design 管理界面和 Vitest 测试 |
+| [`deploy/charts/`](./deploy/charts) | 平台、MinIO、NFS CSI 和 Velero 的离线 Helm Chart |
+| [`deploy/offline/`](./deploy/offline) | 离线组件清单、镜像锁模板、一键部署入口和详细部署文档 |
+| [`build/`](./build) | 平台/工具镜像 Dockerfile 及 MinIO、Kompose、Kopia 源镜像锁 |
+| [`scripts/`](./scripts) | 开发、发行包构建、Kind E2E、Chart 固定和辅助验证脚本 |
+| [`demo/`](./demo) | Kubernetes PostgREST 与 Compose Spring Boot/Nacos 示例应用 |
+| [`docs/adr/`](./docs/adr) | 架构决策记录 |
+| [`docs/operations/`](./docs/operations) | 故障注入、迁移经验、升级和卸载手册 |
+| [`docs/progress/`](./docs/progress) | 各建设窗口的实现与验收历史记录 |
+| [`docs/demo/`](./docs/demo) | Demo 迁移演示和数据校验证据 |
+| [`docs/releases/`](./docs/releases) | 发行说明、归档摘要和校验值 |
+| [`sks-migration-center-spec/`](./sks-migration-center-spec) | 产品规格、领域模型、UI 规格和原始任务拆解 |
+| [`.github/workflows/`](./.github/workflows) | GitHub CI 配置 |
+| [`Makefile`](./Makefile) | 本地 bootstrap、测试、构建、启动和清理的统一入口 |
+| [`docker-compose.yml`](./docker-compose.yml) | 本地开发环境的 PostgreSQL、API、Worker 和 Web 编排 |
+
+本地开发可执行：
 
 ```bash
 cp .env.example .env
@@ -47,32 +217,4 @@ make build
 make dev
 ```
 
-`make dev` 会在被 Git 忽略的 `.data/secrets` 中生成随机开发管理员密码和 256 位凭证主密钥，并在终端显示开发密码。非开发环境必须通过 Kubernetes Secret 只读挂载这两个文件。TLS 部署应保持 `COOKIE_SECURE=true`；仅隔离网络内的一次性 HTTP 工具部署可显式设为 `false`。
-
-启动后访问：
-
-- Web: <http://localhost:3000>
-- API 健康检查: <http://localhost:8080/healthz>
-- API 就绪检查: <http://localhost:8080/readyz>
-- API Prometheus 指标: <http://localhost:8080/metrics>
-- Worker Prometheus 指标: <http://localhost:9090/>
-
-停止本地栈：
-
-```bash
-make down
-```
-
-离线包组装、校验和 Harbor 导入说明见 [`deploy/offline/README.md`](./deploy/offline/README.md)。
-
-## 工程结构
-
-```text
-cmd/                  API 与 Worker 入口
-internal/             后端领域、应用和基础设施代码
-web/                  React + TypeScript 前端
-build/package/        容器镜像定义
-deploy/               Kubernetes 与离线交付资产
-docs/adr/              架构决策记录
-sks-migration-center-spec/ 产品与 UI 规格
-```
+默认开发入口为 Web `http://localhost:3000`、API `http://localhost:8080`。`make dev` 生成的本地管理员密码、主密钥和运行数据位于被 Git 忽略的 `.data/` 中。
