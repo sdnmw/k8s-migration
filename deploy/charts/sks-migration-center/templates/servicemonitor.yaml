@@ -1,0 +1,37 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "migration.name" . }}
+  namespace: {{ default .Release.Namespace .Values.monitoring.serviceMonitor.namespace }}
+  labels:
+    {{- include "migration.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "migration.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  endpoints:
+    - {port: http, path: /metrics, interval: {{ .Values.monitoring.serviceMonitor.interval }}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "migration.name" . }}-worker
+  namespace: {{ default .Release.Namespace .Values.monitoring.serviceMonitor.namespace }}
+  labels:
+    {{- include "migration.labels" . | nindent 4 }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "migration.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: worker
+  endpoints:
+    - {port: metrics, path: /, interval: {{ .Values.monitoring.serviceMonitor.interval }}}
+{{- end }}

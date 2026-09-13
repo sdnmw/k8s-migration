@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "migration.name" . }}-api
+  labels:
+    {{- include "migration.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.replicas.api }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "migration.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "migration.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ include "migration.name" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: api
+          image: {{ include "migration.image" .Values.image.api }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          envFrom:
+            - configMapRef: {name: {{ include "migration.name" . }}}
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.secrets.databaseURLKey }}}}
+            - {name: ADMIN_BOOTSTRAP_PASSWORD_FILE, value: /run/secrets/sks-migration/admin-password}
+            - {name: CREDENTIAL_MASTER_KEY_FILE, value: /run/secrets/sks-migration/master-key}
+          volumeMounts:
+            - {name: application-secrets, mountPath: /run/secrets/sks-migration, readOnly: true}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 20}
+          resources: {{ toYaml .Values.resources.api | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: application-secrets
+          secret:
+            secretName: {{ .Values.secrets.existingSecret }}
+            items:
+              - {key: {{ .Values.secrets.adminPasswordKey }}, path: admin-password}
+              - {key: {{ .Values.secrets.masterKeyKey }}, path: master-key}

@@ -1,0 +1,3 @@
+This chart intentionally deploys one MinIO Pod and one RWO PVC. It has no
+process or node-level high availability beyond the selected storage class.
+The PVC is retained when the Helm release is removed.

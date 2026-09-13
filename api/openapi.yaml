@@ -1,0 +1,2172 @@
+openapi: 3.1.0
+info:
+  title: SKS Migration Center API
+  version: 0.1.0
+  description: API contract for Kubernetes and Docker Compose migrations to SmartX SKS workload clusters.
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /system/info:
+    get:
+      summary: Get service information
+      operationId: getSystemInfo
+      security: []
+      responses:
+        "200":
+          description: Running service information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+        "400": { $ref: "#/components/responses/Problem" }
+  /auth/login:
+    post:
+      summary: Authenticate the local administrator
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "204": { description: Authenticated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /auth/logout:
+    post:
+      summary: End the current administrator session
+      operationId: logout
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      responses:
+        "204": { description: Session removed }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /auth/password:
+    post:
+      summary: Change the current administrator password
+      operationId: changeAdministratorPassword
+      parameters:
+        - $ref: "#/components/parameters/CSRFToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204": { description: Password changed and all sessions invalidated }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+  /auth/me:
+    get:
+      summary: Get the current administrator
+      operationId: getCurrentAdministrator
+      responses:
+        "200":
+          description: Current administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Administrator"
+        "401": { $ref: "#/components/responses/Problem" }
+  /credentials:
+    get:
+      summary: List write-only credential metadata
+      operationId: listCredentials
+      responses:
+        "200":
+          description: Credential metadata without secret payloads
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CredentialMetadata" } }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Encrypt and store a credential
+      operationId: createCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCredentialRequest" }
+      responses:
+        "201":
+          description: Stored credential metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialMetadata" }
+        "400": { $ref: "#/components/responses/Problem" }
+  /credentials/{credentialId}:
+    delete:
+      summary: Delete an unreferenced credential
+      operationId: deleteCredential
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Credential deleted }
+        "404": { $ref: "#/components/responses/Problem" }
+  /environments:
+    get:
+      summary: List registered environments
+      operationId: listEnvironments
+      responses:
+        "200":
+          description: Registered environments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Environment" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Register an environment
+      operationId: createEnvironment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateEnvironmentRequest" }
+      responses:
+        "201":
+          description: Environment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Environment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /environments/{environmentId}:
+    parameters:
+      - $ref: "#/components/parameters/EnvironmentId"
+    get:
+      summary: Get a registered environment
+      operationId: getEnvironment
+      responses:
+        "200":
+          description: Environment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Environment" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      summary: Delete a registered environment
+      operationId: deleteEnvironment
+      responses:
+        "204": { description: Environment deleted }
+        "404": { $ref: "#/components/responses/Problem" }
+  /environments/{environmentId}/test:
+    post:
+      summary: Test environment connectivity and authentication
+      operationId: testEnvironmentConnection
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Connection result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTest" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /environments/{environmentId}/capabilities:
+    get:
+      summary: Get discovered cluster capabilities
+      operationId: getEnvironmentCapabilities
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Last discovered cluster capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClusterCapabilities" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Refresh cluster capabilities
+      operationId: refreshEnvironmentCapabilities
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Refreshed cluster capabilities
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClusterCapabilities" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /environments/{environmentId}/namespaces:
+    get:
+      summary: List Kubernetes namespaces
+      operationId: listEnvironmentNamespaces
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Kubernetes namespaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /storage-profiles:
+    get:
+      summary: List storage profiles
+      operationId: listStorageProfiles
+      parameters:
+        - in: query
+          name: environmentId
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Storage profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StorageProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Create a storage profile
+      operationId: createStorageProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StorageProfileInput" }
+      responses:
+        "201":
+          description: Storage profile created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /storage-profiles/{profileId}/test:
+    post:
+      summary: Test a storage profile from inside its cluster
+      operationId: testStorageProfile
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: PVC write and remount-read probe completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageProfileTestResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /storage-profiles/{profileId}/install:
+    post:
+      summary: Install NFS CSI and a StorageClass
+      operationId: installStorageProfile
+      parameters:
+        - $ref: "#/components/parameters/ProfileId"
+      responses:
+        "200":
+          description: NFS CSI availability, StorageClass and read/write probe completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageProfileTestResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /object-storage/bootstrap:
+    post:
+      summary: Bootstrap the managed MinIO instance
+      operationId: bootstrapObjectStorage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MinIOBootstrapInput" }
+      responses:
+        "201":
+          description: MinIO installed and persistence verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MinIOBootstrapResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /object-storage/profiles:
+    get:
+      summary: List object storage profiles without credential material
+      operationId: listObjectStorageProfiles
+      responses:
+        "200":
+          description: Object storage profiles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ObjectStorageProfile" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Connect and verify an external S3-compatible object store
+      operationId: connectExternalObjectStorage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExternalS3Input" }
+      responses:
+        "201":
+          description: External S3 profile created after a successful read/write probe
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ObjectStorageProfileResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /object-storage/minio/adopt:
+    post:
+      summary: Adopt and verify the fixed managed MinIO instance already present in the target cluster
+      description: Reads the existing managed credential and TLS Secrets, performs an S3 read/write probe, and recreates platform metadata without changing the StatefulSet, Service, Secrets, or PVC.
+      operationId: adoptManagedMinIO
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MinIOAdoptInput" }
+      responses:
+        "200":
+          description: Existing MinIO adopted and verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MinIOBootstrapResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /object-storage/minio/test:
+    post:
+      summary: Test MinIO S3 read and write access
+      operationId: testMinIO
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [profileId]
+              properties:
+                profileId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: S3 read/write test result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTest" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /object-storage/minio/source-policy:
+    get:
+      summary: Read the auditable MinIO source and vulnerability gate
+      operationId: getMinIOSourcePolicy
+      responses:
+        "200":
+          description: Current source build policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MinIOSourcePolicy" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/install:
+    post:
+      summary: Install a managed cluster add-on
+      operationId: installAddon
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddonInstallRequest" }
+      responses:
+        "201":
+          description: Velero, node-agent and MinIO BSL installed and verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VeleroInstallResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/status:
+    get:
+      summary: List managed add-on status
+      operationId: listAddonStatus
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Add-on status
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AddonInstallation" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/velero:
+    delete:
+      summary: Uninstall the managed Velero Helm release while retaining MinIO data
+      operationId: uninstallVeleroAddon
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Removed add-on record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AddonInstallation" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/velero/reuse:
+    post:
+      summary: Reuse an existing Velero and node-agent with a migration-owned BSL
+      operationId: reuseVeleroAddon
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddonReuseRequest" }
+      responses:
+        "201":
+          description: Existing Velero verified and migration BSL available
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VeleroInstallResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /applications/discover:
+    post:
+      summary: Discover and persist a Kubernetes Namespace inventory
+      operationId: discoverApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [environmentId, namespace]
+              properties:
+                environmentId: { type: string, format: uuid }
+                namespace: { type: string, minLength: 1, maxLength: 63 }
+                name: { type: string, minLength: 1, maxLength: 128 }
+                resources:
+                  type: array
+                  items: { $ref: "#/components/schemas/ResourceReference" }
+      responses:
+        "200":
+          description: Persisted Namespace inventory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourceApplication" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /applications/preview:
+    post:
+      summary: Preview a Kubernetes Namespace inventory without persisting it
+      operationId: previewApplication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [environmentId, namespace]
+              properties:
+                environmentId: { type: string, format: uuid }
+                namespace: { type: string }
+      responses:
+        "200":
+          description: Namespace inventory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesInventory" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /applications/discover-all:
+    post:
+      summary: Discover all workload-bearing Kubernetes Namespaces
+      operationId: discoverAllApplications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplicationEnvironmentRequest" }
+      responses:
+        "200":
+          description: Discovered applications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SourceApplication" } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /applications/discover-compose:
+    post:
+      summary: Discover Compose projects from docker compose ls and normalized config
+      operationId: discoverComposeApplications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApplicationEnvironmentRequest" }
+      responses:
+        "200":
+          description: Discovered Compose applications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/SourceApplication" } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+  /applications:
+    get:
+      summary: List discovered applications in a source environment
+      operationId: listApplications
+      parameters:
+        - name: environmentId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Discovered applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SourceApplication" }
+        "400": { $ref: "#/components/responses/Problem" }
+  /applications/{applicationId}:
+    get:
+      summary: Get a persisted application inventory
+      operationId: getApplication
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Application inventory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourceApplication" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /compose/analyze:
+    post:
+      summary: Analyze or register an uploaded Compose configuration
+      operationId: analyzeCompose
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [compose]
+              properties:
+                compose: { type: string, format: binary }
+                environment: { type: string, format: binary }
+                projectName: { type: string, maxLength: 128 }
+                environmentId:
+                  type: string
+                  format: uuid
+                  description: When set, persist the definition as an application belonging to this connected Docker Compose source.
+      responses:
+        "200":
+          description: Parsed inventory, or the registered source application when environmentId is set. Environment values are never returned.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - { $ref: "#/components/schemas/ComposeInventory" }
+                  - { $ref: "#/components/schemas/SourceApplication" }
+        "400": { $ref: "#/components/responses/Problem" }
+  /assessments:
+    post:
+      summary: Assess an application against a target environment capability snapshot
+      operationId: createAssessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAssessmentRequest" }
+      responses:
+        "201":
+          description: Completed and persisted assessment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /assessments/{assessmentId}:
+    get:
+      summary: Get an application assessment
+      operationId: getAssessment
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Assessment result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Assessment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /mapping-profiles:
+    get:
+      summary: List target mapping profiles
+      operationId: listMappingProfiles
+      parameters:
+        - name: targetEnvironmentId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Mapping profiles
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MappingProfile" } }
+        "400": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Create a target mapping profile
+      operationId: createMappingProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MappingProfileInput" }
+      responses:
+        "201":
+          description: Mapping profile created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MappingProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /mapping-profiles/{profileId}:
+    parameters:
+      - name: profileId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      summary: Get a mapping profile
+      operationId: getMappingProfile
+      responses:
+        "200":
+          description: Mapping profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MappingProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      summary: Replace a mapping profile
+      operationId: updateMappingProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MappingProfileInput" }
+      responses:
+        "200":
+          description: Updated mapping profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MappingProfile" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      summary: Delete a mapping profile
+      operationId: deleteMappingProfile
+      responses:
+        "204": { description: Mapping profile deleted }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /transforms/preview:
+    post:
+      summary: Normalize Kubernetes manifests and preview mapping changes
+      description: Secret data and stringData values are redacted in every returned YAML and diff field.
+      operationId: previewManifestTransform
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [profileId, manifests]
+              properties:
+                profileId: { type: string, format: uuid }
+                manifests:
+                  type: string
+                  format: binary
+                  description: Multi-document Kubernetes YAML, at most 10 MiB and 1000 objects.
+      responses:
+        "200":
+          description: Deterministically ordered, redacted transform preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransformResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-plans:
+    get:
+      summary: List migration plans
+      operationId: listMigrationPlans
+      responses:
+        "200":
+          description: Migration plans ordered by creation time
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/MigrationPlan" } }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      summary: Create a migration plan
+      operationId: createMigrationPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MigrationPlanInput" }
+      responses:
+        "201":
+          description: Draft migration plan created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-plans/{planId}:
+    get:
+      summary: Get a migration plan
+      operationId: getMigrationPlan
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "200":
+          description: Migration plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-plans/{planId}/preflight:
+    post:
+      summary: Run migration preflight checks
+      operationId: preflightMigrationPlan
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "200":
+          description: Preflight result and READY/BLOCKED decision
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreflightResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-plans/{planId}/presync:
+    post:
+      summary: Start an online data pre-sync
+      operationId: presyncMigrationPlan
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "202": { description: Pre-sync run scheduled }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-plans/{planId}/runs:
+    post:
+      summary: Start a migration run
+      operationId: createMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/PlanId"
+      responses:
+        "202":
+          description: Migration run scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs:
+    get:
+      summary: List migration runs with display metadata
+      operationId: listMigrationRuns
+      responses:
+        "200":
+          description: Migration runs ordered by newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MigrationRunSummary" }
+        "401": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}:
+    delete:
+      summary: Archive a terminal migration run without deleting workloads or backups
+      operationId: deleteMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "204": { description: Task removed from the list }
+        "400": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    get:
+      summary: Get a migration run
+      operationId: getMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Migration run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/events:
+    get:
+      summary: Stream persisted migration events
+      operationId: streamMigrationEvents
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+        - name: Last-Event-ID
+          in: header
+          schema: { type: integer, format: int64, minimum: 0 }
+      responses:
+        "200":
+          description: Server-sent event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/volume-transfers:
+    get:
+      summary: List per-volume migration progress
+      operationId: listMigrationVolumeTransfers
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Unified Velero, CSI Data Mover and Kopia volume progress
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/VolumeTransfer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/topology:
+    get:
+      summary: Get immutable migration topology evidence and the latest current-state observation
+      operationId: getMigrationTopology
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Source, expected target and observed target topology evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TopologyEvidence" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/topology/refresh:
+    post:
+      summary: Observe the target cluster without modifying the immutable migration snapshot
+      operationId: refreshMigrationTopology
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Topology evidence with a new current-state observation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TopologyEvidence" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/timeline:
+    get:
+      summary: Get step attempts, heartbeats, waits, retries and diagnosis
+      operationId: getMigrationTimeline
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Diagnostic execution timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepTimeline" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/cancel:
+    post:
+      summary: Cancel a migration or schedule source rollback after quiesce
+      operationId: cancelMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "202":
+          description: Migration cancelled or rollback scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/retry:
+    post:
+      summary: Create a new run from a terminal migration
+      operationId: retryMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "202":
+          description: A new migration run was scheduled while preserving the previous run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/cutover:
+    post:
+      summary: Confirm manual traffic cutover
+      operationId: confirmMigrationCutover
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "204": { description: Manual traffic cutover confirmed }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/rollback:
+    post:
+      summary: Restore the source workload before cutover
+      operationId: rollbackMigrationRun
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "202":
+          description: Rollback scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/restore-source:
+    post:
+      summary: Restore the source workload after a completed cutover while retaining target resources
+      operationId: restoreMigrationSource
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "202":
+          description: Idempotent source restoration scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MigrationRunSnapshot" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/report:
+    get:
+      summary: Download the self-contained offline HTML migration report
+      operationId: getMigrationReport
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Single-file HTML report with inline styles, topology and diagnostic timeline
+          content:
+            text/html:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/report-data:
+    get:
+      summary: Get structured report evidence for automation and compatibility
+      operationId: getMigrationReportData
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Structured migration, topology and timeline evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report, topology, timeline]
+                properties:
+                  report: { $ref: "#/components/schemas/MigrationReport" }
+                  topology: { $ref: "#/components/schemas/TopologyEvidence" }
+                  timeline: { $ref: "#/components/schemas/StepTimeline" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /migration-runs/{runId}/cleanup:
+    post:
+      summary: Delete terminal run backup artifacts after the rollback window
+      operationId: cleanupMigrationArtifacts
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+      responses:
+        "200":
+          description: Cleanup result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactCleanupResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sks_migration_session
+  parameters:
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Double-submit token paired with the SameSite CSRF cookie for state-changing requests.
+      schema: { type: string, minLength: 32 }
+    EnvironmentId:
+      name: environmentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProfileId:
+      name: profileId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: RFC 9457 problem response
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    CredentialMetadata:
+      type: object
+      required: [id, name, type, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [KUBECONFIG, SSH, REGISTRY, S3] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CreateCredentialRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type, payload]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        type: { type: string, enum: [KUBECONFIG, SSH, REGISTRY, S3] }
+        payload: { type: string, minLength: 1, maxLength: 1048576, writeOnly: true }
+    ApplicationEnvironmentRequest:
+      type: object
+      additionalProperties: false
+      required: [environmentId]
+      properties:
+        environmentId: { type: string, format: uuid }
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+        code: { type: string }
+        traceId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+    SystemInfo:
+      type: object
+      required: [name, version, environment]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        environment: { type: string }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        password: { type: string, format: password, writeOnly: true, minLength: 1, maxLength: 1024 }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password, writeOnly: true, minLength: 1, maxLength: 1024 }
+        newPassword: { type: string, format: password, writeOnly: true, minLength: 12, maxLength: 1024 }
+    Administrator:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+    CreateEnvironmentRequest:
+      type: object
+      additionalProperties: false
+      required: [name, role, kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        role: { type: string, enum: [SOURCE, TARGET] }
+        kind: { type: string, enum: [KUBERNETES, DOCKER_COMPOSE] }
+        credential:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 1048576
+          description: Required for Kubernetes. Write-only kubeconfig payload; encrypted before persistence and never returned.
+        endpoint:
+          type: string
+          maxLength: 512
+          description: Required for Docker Compose and formatted as ssh://host[:port].
+        ssh:
+          $ref: "#/components/schemas/SSHCredentialInput"
+    SSHCredentialInput:
+      type: object
+      additionalProperties: false
+      required: [username]
+      anyOf:
+        - required: [password]
+        - required: [privateKey]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 128 }
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 1
+          maxLength: 4096
+        privateKey:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 1048576
+        privateKeyPassword:
+          type: string
+          format: password
+          writeOnly: true
+          maxLength: 4096
+        hostKeyFingerprint:
+          type: string
+          pattern: '^SHA256:'
+          description: Pinned OpenSSH SHA-256 server host-key fingerprint.
+    Environment:
+      type: object
+      required: [id, name, role, kind, status, capabilities, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: string, enum: [SOURCE, TARGET] }
+        kind: { type: string, enum: [KUBERNETES, DOCKER_COMPOSE] }
+        endpoint: { type: string }
+        status: { type: string, enum: [PENDING, CONNECTED, DISCONNECTED, ERROR] }
+        statusMessage: { type: string }
+        capabilities: { $ref: "#/components/schemas/ClusterCapabilities" }
+        capabilitiesUpdatedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ClusterCapabilities:
+      type: object
+      properties:
+        kubernetesVersion: { type: string }
+        architectures: { type: array, items: { type: string } }
+        operatingSystems: { type: array, items: { type: string } }
+        nodeCount: { type: integer, minimum: 0 }
+        namespaceCount: { type: integer, minimum: 0 }
+        csiDrivers: { type: array, items: { type: string } }
+        volumeSnapshotClasses: { type: array, items: { type: string } }
+        volumeSnapshotClassDetails:
+          type: array
+          items:
+            type: object
+            required: [name, driver]
+            properties:
+              name: { type: string }
+              driver: { type: string }
+              deletionPolicy: { type: string }
+        csiDataMover:
+          type: object
+          required: [snapshotApi, dataUploadApi, dataDownloadApi, backupRepositoryApi, enableCsi, nodeAgentDesired, nodeAgentReady, backupReady, restoreReady]
+          properties:
+            snapshotApi: { type: boolean }
+            dataUploadApi: { type: boolean }
+            dataDownloadApi: { type: boolean }
+            backupRepositoryApi: { type: boolean }
+            enableCsi: { type: boolean }
+            nodeAgentDesired: { type: integer, minimum: 0 }
+            nodeAgentReady: { type: integer, minimum: 0 }
+            backupReady: { type: boolean }
+            restoreReady: { type: boolean }
+        ingressClasses: { type: array, items: { type: string } }
+        apiGroups: { type: array, items: { type: string } }
+        allocatable:
+          type: object
+          additionalProperties: { type: string }
+        security:
+          type: object
+          additionalProperties: true
+        runtime:
+          type: object
+          additionalProperties: { type: string }
+        storageClasses:
+          type: array
+          items:
+            type: object
+            required: [name, provisioner, default, allowExpansion]
+            properties:
+              name: { type: string }
+              provisioner: { type: string }
+              default: { type: boolean }
+              allowExpansion: { type: boolean }
+              volumeBindingMode: { type: string }
+    ComposeInventory:
+      type: object
+      required: [projectName, services, volumes, networks, configs, secrets, disabledServices, warnings]
+      properties:
+        projectName: { type: string }
+        status: { type: string }
+        configFiles: { type: array, items: { type: string } }
+        workingDir: { type: string }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/ComposeService" }
+        volumes:
+          type: array
+          items: { $ref: "#/components/schemas/ComposeResource" }
+        networks:
+          type: array
+          items: { $ref: "#/components/schemas/ComposeResource" }
+        configs: { type: array, items: { type: string } }
+        secrets: { type: array, items: { type: string } }
+        disabledServices: { type: array, items: { type: string } }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [code, message]
+            properties:
+              code: { type: string }
+              service: { type: string }
+              message: { type: string }
+    ComposeService:
+      type: object
+      required: [name, build, profiles, dependsOn, ports, mounts, networks, environmentKeys, privileged]
+      properties:
+        name: { type: string }
+        image: { type: string }
+        build: { type: boolean }
+        profiles: { type: array, items: { type: string } }
+        dependsOn: { type: array, items: { type: string } }
+        ports:
+          type: array
+          items:
+            type: object
+            required: [target, protocol]
+            properties:
+              name: { type: string }
+              target: { type: integer, minimum: 1, maximum: 65535 }
+              published: { type: string }
+              protocol: { type: string }
+              hostIp: { type: string }
+        mounts:
+          type: array
+          items:
+            type: object
+            required: [type, target, readOnly]
+            properties:
+              type: { type: string }
+              source: { type: string }
+              target: { type: string }
+              readOnly: { type: boolean }
+        networks: { type: array, items: { type: string } }
+        environmentKeys: { type: array, items: { type: string } }
+        privileged: { type: boolean }
+        networkMode: { type: string }
+    ComposeResource:
+      type: object
+      required: [name, external]
+      properties:
+        name: { type: string }
+        runtimeName: { type: string }
+        driver: { type: string }
+        external: { type: boolean }
+    SourceApplication:
+      type: object
+      required: [id, environmentId, name, sourceType, namespace, inventory, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        environmentId: { type: string, format: uuid }
+        name: { type: string }
+        sourceType: { type: string, enum: [KUBERNETES, COMPOSE] }
+        namespace: { type: string }
+        inventory: { $ref: "#/components/schemas/KubernetesInventory" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    KubernetesInventory:
+      type: object
+      required: [resources, workloads, services, ingresses, configMaps, secrets, serviceAccounts, roles, roleBindings, crds, customResources, pvcs, images, dependencies, warnings, counts]
+      properties:
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        workloads:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        services:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        ingresses:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        configMaps:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        secrets:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        serviceAccounts:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        roleBindings:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        crds:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        customResources:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceSummary" }
+        pvcs:
+          type: array
+          items: { $ref: "#/components/schemas/VolumeSummary" }
+        images:
+          type: array
+          items: { $ref: "#/components/schemas/ImageSummary" }
+        dependencies:
+          type: array
+          items: { $ref: "#/components/schemas/ResourceDependency" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/InventoryWarning" }
+        counts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        compose:
+          $ref: "#/components/schemas/ComposeInventory"
+    ResourceSummary:
+      type: object
+      required: [kind, name]
+      properties:
+        apiVersion: { type: string }
+        kind: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+        images: { type: array, items: { type: string } }
+        replicas: { type: integer, format: int64, minimum: 0 }
+        requests:
+          type: object
+          additionalProperties: { type: string }
+        limits:
+          type: object
+          additionalProperties: { type: string }
+        missingRequests:
+          type: array
+          items: { type: string, enum: [cpu, memory] }
+          description: Resource request names missing from at least one application or init container.
+        ingressClassName: { type: string }
+        serviceType: { type: string }
+        securityRisks:
+          type: array
+          items: { type: string, enum: [HOST_NETWORK, HOST_PID, HOST_IPC, HOST_PATH, HOST_PORT, PRIVILEGED] }
+          description: Non-sensitive workload security facts used by assessment rules.
+        dataKeys:
+          type: array
+          items: { type: string }
+          description: ConfigMap keys only; values are never included.
+        secretKeys:
+          type: array
+          items: { type: string }
+          description: Secret keys only; values are never included.
+    ResourceReference:
+      type: object
+      required: [kind, name]
+      properties:
+        apiVersion: { type: string }
+        kind: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+    ResourceDependency:
+      type: object
+      required: [from, to, type, required]
+      properties:
+        from: { $ref: "#/components/schemas/ResourceReference" }
+        to: { $ref: "#/components/schemas/ResourceReference" }
+        type: { type: string }
+        required: { type: boolean }
+    InventoryWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        resource: { type: string }
+        message: { type: string }
+    VolumeSummary:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        namespace: { type: string }
+        capacityBytes: { type: integer, format: int64, minimum: 0 }
+        storageClassName: { type: string }
+        accessModes: { type: array, items: { type: string } }
+        volumeMode: { type: string }
+        source: { type: string }
+    ImageSummary:
+      type: object
+      required: [reference]
+      properties:
+        reference: { type: string }
+        digest: { type: string }
+        architectures: { type: array, items: { type: string } }
+    ConnectionTest:
+      type: object
+      required: [success, checks]
+      properties:
+        success: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status, message]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [PASSED, FAILED, WARNING] }
+              message: { type: string }
+    MinIOBootstrapInput:
+      type: object
+      additionalProperties: false
+      required: [environmentId, endpoint, storageClass, imageRepository, imageDigest, tlsSecretName]
+      properties:
+        environmentId: { type: string, format: uuid }
+        name: { type: string, default: managed-minio }
+        endpoint: { type: string, format: uri, pattern: "^https://" }
+        bucket: { type: string, default: velero }
+        region: { type: string, default: minio }
+        storageClass: { type: string, minLength: 1 }
+        storageSize: { type: string, default: 100Gi }
+        imageRepository: { type: string, minLength: 1 }
+        imageDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        tlsSecretName: { type: string, minLength: 1 }
+        caBundle: { type: string, description: Optional PEM CA chain. Stored only in the encrypted S3 credential. }
+    MinIOAdoptInput:
+      type: object
+      additionalProperties: false
+      required: [environmentId, endpoint]
+      properties:
+        environmentId: { type: string, format: uuid }
+        name: { type: string, default: managed-minio }
+        endpoint: { type: string, format: uri, pattern: "^https://" }
+        bucket: { type: string, default: velero }
+        region: { type: string, default: minio }
+        tlsSecretName: { type: string, default: sks-migration-minio-tls }
+        caBundle: { type: string, description: "Optional PEM CA chain. When omitted, ca.crt or tls.crt is read from the existing managed TLS Secret." }
+    ExternalS3Input:
+      type: object
+      additionalProperties: false
+      required: [name, endpoint, bucket, accessKey, secretKey]
+      properties:
+        name: { type: string, minLength: 1 }
+        endpoint: { type: string, format: uri, pattern: "^https://" }
+        bucket: { type: string, minLength: 3 }
+        region: { type: string, default: us-east-1 }
+        accessKey: { type: string, minLength: 1, writeOnly: true }
+        secretKey: { type: string, minLength: 1, writeOnly: true }
+        caBundle: { type: string, description: Optional PEM CA chain for a private S3 endpoint. }
+    ObjectStorageProfile:
+      type: object
+      required: [id, name, endpoint, bucket, region, tlsVerify, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        endpoint: { type: string, format: uri }
+        bucket: { type: string }
+        region: { type: string }
+        credentialId: { type: string, format: uuid, description: Encrypted credential reference only. }
+        tlsVerify: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MinIOBootstrapResult:
+      type: object
+      required: [installation, profile, checks]
+      properties:
+        installation: { $ref: "#/components/schemas/AddonInstallation" }
+        profile: { $ref: "#/components/schemas/ObjectStorageProfile" }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status, message]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [PASSED, FAILED, WARNING] }
+              message: { type: string }
+    ObjectStorageProfileResult:
+      type: object
+      required: [profile, checks]
+      properties:
+        profile: { $ref: "#/components/schemas/ObjectStorageProfile" }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status, message]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [PASSED, FAILED, WARNING] }
+              message: { type: string }
+    MinIOSourcePolicy:
+      type: object
+      required: [apiVersion, kind, repository, ref, commit, license, sourceOfferRequired, officialImage, releaseAllowed, securityGate, riskAcceptance]
+      properties:
+        apiVersion: { type: string }
+        kind: { type: string }
+        repository: { type: string, format: uri }
+        ref: { type: string }
+        commit: { type: string, pattern: "^[a-f0-9]{40}$" }
+        license: { type: string, enum: [AGPL-3.0-only] }
+        sourceOfferRequired: { type: boolean }
+        officialImage:
+          type: object
+          required: [repository, tag, digest]
+          properties:
+            repository: { type: string, enum: [docker.io/minio/minio] }
+            tag: { type: string }
+            digest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        releaseAllowed: { type: boolean }
+        securityGate:
+          type: object
+          required: [status, checkedAt, blockers]
+          properties:
+            status: { type: string, enum: [PASSED, BLOCKED, ACCEPTED_RISK] }
+            checkedAt: { type: string, format: date-time }
+            blockers:
+              type: array
+              items:
+                type: object
+                required: [id, severity, reason]
+                properties:
+                  id: { type: string }
+                  severity: { type: string, enum: [HIGH, CRITICAL] }
+                  reason: { type: string }
+        riskAcceptance:
+          type: object
+          required: [accepted, scope, rationale, acceptedAt]
+          properties:
+            accepted: { type: boolean }
+            scope: { type: string }
+            rationale: { type: string }
+            acceptedAt: { type: string, format: date-time }
+    StorageProfileInput:
+      type: object
+      additionalProperties: false
+      required: [environmentId, name, type, storageClassName, reclaimPolicy]
+      properties:
+        environmentId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [SMTX_BLOCK, EXISTING_NFS_SC, EXTERNAL_NFS_SC] }
+        storageClassName: { type: string }
+        nfsServer: { type: string }
+        nfsExport: { type: string }
+        mountOptions: { type: array, items: { type: string } }
+        reclaimPolicy: { type: string, enum: [Retain, Delete], default: Retain }
+    StorageProfile:
+      allOf:
+        - $ref: "#/components/schemas/StorageProfileInput"
+        - type: object
+          required: [id, status, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            provisioner: { type: string }
+            status: { type: string, enum: [PENDING, INSTALLING, READY, FAILED] }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    StorageProfileTestResult:
+      type: object
+      required: [profile, probe, checks]
+      properties:
+        profile: { $ref: "#/components/schemas/StorageProfile" }
+        probe:
+          type: object
+          required: [storageClass, pvcName, bytes, remounted]
+          properties:
+            storageClass: { type: string }
+            pvcName: { type: string }
+            bytes: { type: integer, minimum: 1 }
+            remounted: { type: boolean }
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, status, message]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [PASSED, FAILED, WARNING] }
+              message: { type: string }
+    AddonInstallRequest:
+      type: object
+      additionalProperties: false
+      required: [type, objectStorageProfileId]
+      properties:
+        type: { type: string, enum: [VELERO] }
+        objectStorageProfileId: { type: string, format: uuid }
+        prefix: { type: string, maxLength: 256 }
+        kubeletRoot:
+          type: string
+          default: /var/lib/kubelet
+          description: Absolute kubelet root used by node-agent hostPath mounts.
+    AddonReuseRequest:
+      type: object
+      additionalProperties: false
+      required: [objectStorageProfileId]
+      properties:
+        objectStorageProfileId: { type: string, format: uuid }
+        prefix: { type: string, maxLength: 256 }
+    AddonInstallation:
+      type: object
+      required: [id, environmentId, type, version, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        environmentId: { type: string, format: uuid }
+        type: { type: string, enum: [MINIO, VELERO, NFS_CSI] }
+        version: { type: string }
+        status: { type: string, enum: [PENDING, INSTALLING, READY, FAILED, REMOVED] }
+        values:
+          type: object
+          additionalProperties: true
+          description: Non-secret, installation-specific settings and credential references.
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BackupStorageLocationStatus:
+      type: object
+      additionalProperties: false
+      required: [name, phase]
+      properties:
+        name: { type: string }
+        phase: { type: string, enum: [Unknown, Available, Unavailable] }
+        message: { type: string }
+        lastValidationTime: { type: string, format: date-time }
+    VeleroInstallResult:
+      type: object
+      additionalProperties: false
+      required: [installation, backupStorageLocation, checks]
+      properties:
+        installation: { $ref: "#/components/schemas/AddonInstallation" }
+        backupStorageLocation: { $ref: "#/components/schemas/BackupStorageLocationStatus" }
+        checks:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, status, message]
+            properties:
+              name: { type: string }
+              status: { type: string, enum: [PASSED, FAILED, WARNING] }
+              message: { type: string }
+    CreateAssessmentRequest:
+      type: object
+      additionalProperties: false
+      required: [applicationId, targetEnvironmentId]
+      properties:
+        applicationId: { type: string, format: uuid }
+        targetEnvironmentId: { type: string, format: uuid }
+    AssessmentIssue:
+      type: object
+      required: [id, assessmentId, severity, category, resourceKind, resourceName, ruleId, title, description, autoFixable]
+      properties:
+        id: { type: string, format: uuid }
+        assessmentId: { type: string, format: uuid }
+        severity: { type: string, enum: [BLOCKER, WARNING, INFO] }
+        category: { type: string, enum: [COMPUTE, STORAGE, NETWORK, SECURITY, IMAGE, API, DEPENDENCY] }
+        resourceKind: { type: string }
+        resourceNamespace: { type: string }
+        resourceName: { type: string }
+        ruleId: { type: string }
+        title: { type: string }
+        description: { type: string }
+        remediation: { type: string }
+        autoFixable: { type: boolean }
+    Assessment:
+      type: object
+      required: [id, applicationId, score, blockerCount, warningCount, infoCount, status, issues, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        applicationId: { type: string, format: uuid }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        blockerCount: { type: integer, minimum: 0 }
+        warningCount: { type: integer, minimum: 0 }
+        infoCount: { type: integer, minimum: 0 }
+        status: { type: string, enum: [PENDING, RUNNING, COMPLETED, FAILED] }
+        issues: { type: array, items: { $ref: "#/components/schemas/AssessmentIssue" } }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    KeyValueMapping:
+      type: object
+      additionalProperties: false
+      required: [source, target]
+      properties:
+        source: { type: string, minLength: 1 }
+        target: { type: string, minLength: 1 }
+    NodeLabelMapping:
+      type: object
+      additionalProperties: false
+      required: [source, action]
+      properties:
+        source: { type: string, minLength: 1 }
+        target: { type: string }
+        action: { type: string, enum: [MAP, DROP] }
+    NFSMapping:
+      type: object
+      additionalProperties: false
+      required: [sourceServer, sourceExport, targetServer, targetExport, targetStorageClass]
+      properties:
+        sourceServer: { type: string, minLength: 1 }
+        sourceExport: { type: string, pattern: ^/ }
+        targetServer: { type: string, minLength: 1 }
+        targetExport: { type: string, pattern: ^/ }
+        targetStorageClass: { type: string, minLength: 1 }
+    MappingProfileInput:
+      type: object
+      additionalProperties: false
+      required: [name, targetEnvironmentId]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        targetEnvironmentId: { type: string, format: uuid }
+        storageMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        namespaceMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        ingressMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        registryMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        nfsMappings: { type: array, items: { $ref: "#/components/schemas/NFSMapping" } }
+        nodeLabelMappings: { type: array, items: { $ref: "#/components/schemas/NodeLabelMapping" } }
+    MappingProfile:
+      type: object
+      additionalProperties: false
+      required: [id, name, targetEnvironmentId, storageMappings, namespaceMappings, ingressMappings, registryMappings, nfsMappings, nodeLabelMappings, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        targetEnvironmentId: { type: string, format: uuid }
+        storageMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        namespaceMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        ingressMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        registryMappings: { type: array, items: { $ref: "#/components/schemas/KeyValueMapping" } }
+        nfsMappings: { type: array, items: { $ref: "#/components/schemas/NFSMapping" } }
+        nodeLabelMappings: { type: array, items: { $ref: "#/components/schemas/NodeLabelMapping" } }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TransformDocument:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, kind, name, sourceYaml, targetYaml, unifiedDiff, changed]
+      properties:
+        apiVersion: { type: string }
+        kind: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        sourceYaml: { type: string, description: Source manifest with Secret values redacted. }
+        targetYaml: { type: string, description: Normalized target manifest with Secret values redacted. }
+        unifiedDiff: { type: string, description: Unified diff generated only from redacted previews. }
+        changed: { type: boolean }
+    TransformResult:
+      type: object
+      additionalProperties: false
+      required: [documents, changed]
+      properties:
+        documents:
+          type: array
+          maxItems: 1000
+          items: { $ref: "#/components/schemas/TransformDocument" }
+        changed: { type: integer, minimum: 0, maximum: 1000 }
+    MigrationStrategy:
+      type: object
+      additionalProperties: false
+      required: [resourceMode, volumeMode, preSyncEnabled, overwriteExistingResources, preserveNodePort]
+      properties:
+        resourceMode: { type: string, enum: [TRANSFORM] }
+        volumeMode: { type: string, enum: [NONE, FS_BACKUP, CSI_DATA_MOVER, COMPOSE_KOPIA] }
+        preSyncEnabled: { type: boolean }
+        overwriteExistingResources: { type: boolean }
+        preserveNodePort: { type: boolean }
+        preQuiesceHook: { type: string, maxLength: 4096 }
+        postRollbackHook: { type: string, maxLength: 4096 }
+    ValidationPolicy:
+      type: object
+      additionalProperties: false
+      required: [requireWorkloadsReady, requirePVCsBound, timeoutSeconds]
+      properties:
+        requireWorkloadsReady: { type: boolean }
+        requirePVCsBound: { type: boolean }
+        httpChecks: { type: array, items: { type: string } }
+        tcpChecks: { type: array, items: { type: string } }
+        timeoutSeconds: { type: integer, minimum: 30, maximum: 3600 }
+    MigrationPlanInput:
+      type: object
+      additionalProperties: false
+      required: [name, sourceEnvironmentId, targetEnvironmentId, sourceApplicationId, assessmentId, mappingProfileId, strategy, validationPolicy]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        sourceEnvironmentId: { type: string, format: uuid }
+        targetEnvironmentId: { type: string, format: uuid }
+        sourceApplicationId: { type: string, format: uuid }
+        assessmentId: { type: string, format: uuid }
+        mappingProfileId: { type: string, format: uuid }
+        strategy: { $ref: "#/components/schemas/MigrationStrategy" }
+        validationPolicy: { $ref: "#/components/schemas/ValidationPolicy" }
+    MigrationPlan:
+      allOf:
+        - $ref: "#/components/schemas/MigrationPlanInput"
+        - type: object
+          required: [id, status, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string, enum: [DRAFT, READY, BLOCKED, RUNNING, COMPLETED, FAILED] }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    PreflightCheck:
+      type: object
+      additionalProperties: false
+      required: [id, category, status, title, message]
+      properties:
+        id: { type: string }
+        category: { type: string }
+        status: { type: string, enum: [PASSED, WARNING, BLOCKER] }
+        title: { type: string }
+        message: { type: string }
+        remediation: { type: string }
+    PreflightResult:
+      type: object
+      additionalProperties: false
+      required: [migrationPlanId, ready, blockerCount, warningCount, checks]
+      properties:
+        migrationPlanId: { type: string, format: uuid }
+        ready: { type: boolean }
+        blockerCount: { type: integer, minimum: 0 }
+        warningCount: { type: integer, minimum: 0 }
+        checks: { type: array, items: { $ref: "#/components/schemas/PreflightCheck" } }
+    MigrationRun:
+      type: object
+      additionalProperties: false
+      required: [id, migrationPlanId, runNumber, status, progress, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        migrationPlanId: { type: string, format: uuid }
+        runNumber: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [PENDING, PREFLIGHT, PRESYNC, QUIESCE, FINAL_BACKUP, TRANSFER, TRANSFORM, RESTORE, VALIDATION, AWAITING_CUTOVER, ROLLING_BACK, COMPLETED, FAILED, CANCELLED]
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        bytesTotal: { type: integer, format: int64, minimum: 0 }
+        bytesTransferred: { type: integer, format: int64, minimum: 0 }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MigrationStep:
+      type: object
+      additionalProperties: false
+      required: [id, migrationRunId, type, attempt, status, progress, idempotencyKey, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        migrationRunId: { type: string, format: uuid }
+        type: { type: string, enum: [PREFLIGHT, PRESYNC, QUIESCE, FINAL_BACKUP, TRANSFER, TRANSFORM, RESTORE, VALIDATION, AWAIT_CUTOVER, ROLLBACK] }
+        attempt: { type: integer, minimum: 1 }
+        status: { type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, SKIPPED] }
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        summary: { type: string }
+        idempotencyKey: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VolumeTransfer:
+      type: object
+      additionalProperties: false
+      required: [id, migrationRunId, engine, namespace, sourceVolume, targetVolume, totalBytes, transferredBytes, throughputBytesPerSecond, retryCount, checksumStatus, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        migrationRunId: { type: string, format: uuid }
+        engine: { type: string, enum: [VELERO_FSB, CSI_DATA_MOVER, COMPOSE_KOPIA] }
+        namespace: { type: string }
+        sourceVolume: { type: string }
+        targetVolume: { type: string }
+        totalBytes: { type: integer, format: int64, minimum: 0 }
+        transferredBytes: { type: integer, format: int64, minimum: 0 }
+        throughputBytesPerSecond: { type: integer, format: int64, minimum: 0 }
+        retryCount: { type: integer, minimum: 0 }
+        checksumStatus: { type: string }
+        status: { type: string, enum: [PENDING, RUNNING, COMPLETED, FAILED, CANCELLED] }
+        errorMessage: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MigrationRunSnapshot:
+      type: object
+      additionalProperties: false
+      required: [run, steps]
+      properties:
+        run: { $ref: "#/components/schemas/MigrationRun" }
+        steps: { type: array, items: { $ref: "#/components/schemas/MigrationStep" } }
+    MigrationRunSummary:
+      allOf:
+        - $ref: "#/components/schemas/MigrationRun"
+        - type: object
+          additionalProperties: false
+          required: [planName, sourceType, sourceEnvironmentName, targetEnvironmentName, applicationName]
+          properties:
+            planName: { type: string }
+            sourceType: { type: string, enum: [KUBERNETES, COMPOSE] }
+            sourceEnvironmentName: { type: string }
+            targetEnvironmentName: { type: string }
+            applicationName: { type: string }
+            applicationNamespace: { type: string }
+    MappingChange:
+      type: object
+      additionalProperties: false
+      required: [type, sourceValue, targetValue, changed]
+      properties:
+        type: { type: string }
+        path: { type: string }
+        sourceValue: { type: string }
+        targetValue: { type: string }
+        changed: { type: boolean }
+        applied: { type: boolean }
+    TopologyNode:
+      type: object
+      additionalProperties: false
+      required: [id, side, kind, name, required, status]
+      properties:
+        id: { type: string }
+        side: { type: string, enum: [SOURCE, TARGET] }
+        apiVersion: { type: string }
+        kind: { type: string }
+        namespace: { type: string }
+        name: { type: string }
+        required: { type: boolean }
+        status: { type: string, enum: [DISCOVERED, PLANNED, CREATED, SUCCEEDED, WARNING, FAILED, MISSING, SKIPPED, UNKNOWN] }
+        health: { type: string }
+        message: { type: string }
+        attributes: { type: object, additionalProperties: true }
+        mappingChanges: { type: array, items: { $ref: "#/components/schemas/MappingChange" } }
+    TopologyEdge:
+      type: object
+      additionalProperties: false
+      required: [id, from, to, relation, required]
+      properties:
+        id: { type: string }
+        from: { type: string }
+        to: { type: string }
+        relation: { type: string }
+        required: { type: boolean }
+        status: { type: string, enum: [DISCOVERED, PLANNED, CREATED, SUCCEEDED, WARNING, FAILED, MISSING, SKIPPED, UNKNOWN] }
+        mapping: { type: boolean }
+    TopologyGraph:
+      type: object
+      additionalProperties: false
+      required: [name, type, nodes, edges]
+      properties:
+        name: { type: string }
+        type: { type: string, enum: [KUBERNETES, COMPOSE] }
+        namespace: { type: string }
+        nodes: { type: array, items: { $ref: "#/components/schemas/TopologyNode" } }
+        edges: { type: array, items: { $ref: "#/components/schemas/TopologyEdge" } }
+    ResourceMapping:
+      type: object
+      additionalProperties: false
+      required: [id, sourceNodeId, relation]
+      properties:
+        id: { type: string }
+        sourceNodeId: { type: string }
+        targetNodeId: { type: string }
+        relation: { type: string }
+        changes: { type: array, items: { $ref: "#/components/schemas/MappingChange" } }
+    CurrentTopologyObservation:
+      type: object
+      additionalProperties: false
+      required: [graph, checkedAt, drifted]
+      properties:
+        graph: { $ref: "#/components/schemas/TopologyGraph" }
+        checkedAt: { type: string, format: date-time }
+        error: { type: string }
+        drifted: { type: integer, minimum: 0 }
+    TopologyEvidence:
+      type: object
+      additionalProperties: false
+      required: [migrationRunId, source, target, mappings, snapshotOrigin, sourceCapturedAt]
+      properties:
+        migrationRunId: { type: string, format: uuid }
+        source: { $ref: "#/components/schemas/TopologyGraph" }
+        target: { $ref: "#/components/schemas/TopologyGraph" }
+        mappings: { type: array, items: { $ref: "#/components/schemas/ResourceMapping" } }
+        snapshotOrigin: { type: string, enum: [NATIVE, RECONSTRUCTED] }
+        sourceCapturedAt: { type: string, format: date-time }
+        targetCapturedAt: { type: string, format: date-time }
+        currentObservation: { $ref: "#/components/schemas/CurrentTopologyObservation" }
+        evidenceLimitations: { type: array, items: { type: string } }
+    StepAttempt:
+      type: object
+      additionalProperties: false
+      required: [stepId, attempt, status, startedAt]
+      properties:
+        stepId: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        status: { type: string, enum: [RUNNING, SUCCEEDED, RETRY_SCHEDULED, FAILED] }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        heartbeatAt: { type: string, format: date-time }
+        leaseExpiresAt: { type: string, format: date-time }
+        nextAttemptAt: { type: string, format: date-time }
+        errorCode: { type: string }
+        errorMessage: { type: string }
+        diagnostic: { type: string }
+    TimelineStep:
+      type: object
+      additionalProperties: false
+      required: [step, attempts, events]
+      properties:
+        step: { $ref: "#/components/schemas/MigrationStep" }
+        attempts: { type: array, items: { $ref: "#/components/schemas/StepAttempt" } }
+        events: { type: array, items: { type: object, additionalProperties: true } }
+    StepTimeline:
+      type: object
+      additionalProperties: false
+      required: [migrationRunId, generatedAt, steps, events, diagnosis]
+      properties:
+        migrationRunId: { type: string, format: uuid }
+        generatedAt: { type: string, format: date-time }
+        steps: { type: array, items: { $ref: "#/components/schemas/TimelineStep" } }
+        events: { type: array, items: { type: object, additionalProperties: true } }
+        diagnosis:
+          type: object
+          additionalProperties: false
+          required: [state, title]
+          properties:
+            state: { type: string }
+            title: { type: string }
+            reason: { type: string }
+            remediation: { type: string }
+            failedStepId: { type: string, format: uuid }
+            lastSuccessfulStep: { type: string }
+            lastEventAt: { type: string, format: date-time }
+    MigrationReport:
+      type: object
+      additionalProperties: false
+      required: [generatedAt, summary, plan, run, steps, events, volumeTransfers]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        summary:
+          type: object
+          additionalProperties: false
+          required: [result, durationSeconds, stepCount, completedStepCount, failedStepCount, warningCount, errorCount, bytesTransferred, averageBytesPerSecond, cutoverConfirmed, sourceRollbackWasInvoked]
+          properties:
+            result: { type: string, enum: [PENDING, PREFLIGHT, PRESYNC, QUIESCE, FINAL_BACKUP, TRANSFER, TRANSFORM, RESTORE, VALIDATION, AWAITING_CUTOVER, ROLLING_BACK, COMPLETED, FAILED, CANCELLED] }
+            durationSeconds: { type: integer, format: int64, minimum: 0 }
+            stepCount: { type: integer, minimum: 0 }
+            completedStepCount: { type: integer, minimum: 0 }
+            failedStepCount: { type: integer, minimum: 0 }
+            warningCount: { type: integer, minimum: 0 }
+            errorCount: { type: integer, minimum: 0 }
+            bytesTransferred: { type: integer, format: int64, minimum: 0 }
+            averageBytesPerSecond: { type: integer, format: int64, minimum: 0 }
+            cutoverConfirmed: { type: boolean }
+            sourceRollbackWasInvoked: { type: boolean }
+        plan: { $ref: "#/components/schemas/MigrationPlan" }
+        run: { $ref: "#/components/schemas/MigrationRun" }
+        steps: { type: array, items: { $ref: "#/components/schemas/MigrationStep" } }
+        events:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        volumeTransfers: { type: array, items: { $ref: "#/components/schemas/VolumeTransfer" } }
+    ArtifactCleanupResult:
+      type: object
+      additionalProperties: false
+      required: [migrationRunId, clusters, cleanedAt]
+      properties:
+        migrationRunId: { type: string, format: uuid }
+        clusters:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [environmentId, role, backupsDeleted, restoresDeleted]
+            properties:
+              environmentId: { type: string, format: uuid }
+              role: { type: string, enum: [SOURCE, TARGET] }
+              backupsDeleted: { type: integer, minimum: 0 }
+              restoresDeleted: { type: integer, minimum: 0 }
+        retained: { type: array, items: { type: string } }
+        cleanedAt: { type: string, format: date-time }

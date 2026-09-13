@@ -1,0 +1,124 @@
+# Release CI replaces every ${...} value, exports each source digest as an OCI
+# image layout, and writes the rendered file as images.lock.yaml. The offline
+# packer intentionally rejects this template because unresolved digests are not a lock.
+apiVersion: migration.smartx.com/v1alpha1
+kind: OfflineImageLock
+bundleVersion: ${BUNDLE_VERSION}
+images:
+  - name: platform-api
+    source: ${API_SOURCE}@sha256:${API_DIGEST}
+    target: ${TARGET_PROJECT}/api:${BUNDLE_VERSION}
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/platform-api
+    sbomPath: sbom/platform-api.spdx.json
+    signaturePath: signatures/platform-api.bundle.json
+    scanPath: scans/platform-api.json
+  - name: platform-worker
+    source: ${WORKER_SOURCE}@sha256:${WORKER_DIGEST}
+    target: ${TARGET_PROJECT}/worker:${BUNDLE_VERSION}
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/platform-worker
+    sbomPath: sbom/platform-worker.spdx.json
+    signaturePath: signatures/platform-worker.bundle.json
+    scanPath: scans/platform-worker.json
+  - name: platform-web
+    source: ${WEB_SOURCE}@sha256:${WEB_DIGEST}
+    target: ${TARGET_PROJECT}/web:${BUNDLE_VERSION}
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/platform-web
+    sbomPath: sbom/platform-web.spdx.json
+    signaturePath: signatures/platform-web.bundle.json
+    scanPath: scans/platform-web.json
+  - name: minio
+    source: docker.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    target: ${TARGET_PROJECT}/minio:RELEASE.2025-09-07T16-13-09Z
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/minio
+    sbomPath: sbom/minio.spdx.json
+    signaturePath: signatures/minio.bundle.json
+    scanPath: scans/minio.json
+  - name: velero
+    source: docker.io/velero/velero@sha256:11459094b1b21ec7c817b08f8067d9e89380835547915cac9c4132ff05b55b90
+    target: ${TARGET_PROJECT}/velero:v1.18.1
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/velero
+    sbomPath: sbom/velero.spdx.json
+    signaturePath: signatures/velero.bundle.json
+    scanPath: scans/velero.json
+  - name: velero-plugin-for-aws
+    source: docker.io/velero/velero-plugin-for-aws@sha256:7e82f717f44e89671212e0dfce7e061321c386ea84a33bca64a671670ca6c278
+    target: ${TARGET_PROJECT}/velero-plugin-for-aws:v1.14.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/velero-plugin-for-aws
+    sbomPath: sbom/velero-plugin-for-aws.spdx.json
+    signaturePath: signatures/velero-plugin-for-aws.bundle.json
+    scanPath: scans/velero-plugin-for-aws.json
+  - name: nfsplugin
+    source: registry.k8s.io/sig-storage/nfsplugin@sha256:1eb5a85180a4ad0193a31d319b163f35c8c1857794ebaac71d8abcdd5a0516d3
+    target: ${TARGET_PROJECT}/nfsplugin:v4.13.4
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/nfsplugin
+    sbomPath: sbom/nfsplugin.spdx.json
+    signaturePath: signatures/nfsplugin.bundle.json
+    scanPath: scans/nfsplugin.json
+  - name: csi-provisioner
+    source: registry.k8s.io/sig-storage/csi-provisioner@sha256:a4b0b1a37605b7b04a293e136edf7006ec1786a8eb3f4e5a945f81d667dcc371
+    target: ${TARGET_PROJECT}/csi-provisioner:v6.3.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/csi-provisioner
+    sbomPath: sbom/csi-provisioner.spdx.json
+    signaturePath: signatures/csi-provisioner.bundle.json
+    scanPath: scans/csi-provisioner.json
+  - name: csi-resizer
+    source: registry.k8s.io/sig-storage/csi-resizer@sha256:a2d40c1c3ccb0c48b467125a6652c4dd5dcbf0d295641c9989581cfc690f6cf3
+    target: ${TARGET_PROJECT}/csi-resizer:v2.2.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/csi-resizer
+    sbomPath: sbom/csi-resizer.spdx.json
+    signaturePath: signatures/csi-resizer.bundle.json
+    scanPath: scans/csi-resizer.json
+  - name: csi-node-driver-registrar
+    source: registry.k8s.io/sig-storage/csi-node-driver-registrar@sha256:f9de845b170155199f2a2a3f9531cf13d78e31235e9db6b6582a8b0db0a50dad
+    target: ${TARGET_PROJECT}/csi-node-driver-registrar:v2.17.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/csi-node-driver-registrar
+    sbomPath: sbom/csi-node-driver-registrar.spdx.json
+    signaturePath: signatures/csi-node-driver-registrar.bundle.json
+    scanPath: scans/csi-node-driver-registrar.json
+  - name: livenessprobe
+    source: registry.k8s.io/sig-storage/livenessprobe@sha256:06da0d5b8908072f2e4522692aee8dc119fba7247a9658497e1153992cd777e9
+    target: ${TARGET_PROJECT}/livenessprobe:v2.19.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/livenessprobe
+    sbomPath: sbom/livenessprobe.spdx.json
+    signaturePath: signatures/livenessprobe.bundle.json
+    scanPath: scans/livenessprobe.json
+  - name: nfs-probe-helper
+    source: docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+    target: ${TARGET_PROJECT}/nfs-probe-helper:1.36.1
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/nfs-probe-helper
+    sbomPath: sbom/nfs-probe-helper.spdx.json
+    signaturePath: signatures/nfs-probe-helper.bundle.json
+    scanPath: scans/nfs-probe-helper.json
+  - name: kompose
+    source: ${KOMPOSE_SOURCE}@sha256:${KOMPOSE_DIGEST}
+    target: ${TARGET_PROJECT}/kompose:v1.38.0
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/kompose
+    sbomPath: sbom/kompose.spdx.json
+    signaturePath: signatures/kompose.bundle.json
+    scanPath: scans/kompose.json
+  - name: kopia
+    source: ${KOPIA_SOURCE}@sha256:${KOPIA_DIGEST}
+    target: ${TARGET_PROJECT}/kopia:v0.23.1
+    platforms: [linux/amd64, linux/arm64]
+    layoutPath: images/kopia
+    sbomPath: sbom/kopia.spdx.json
+    signaturePath: signatures/kopia.bundle.json
+    scanPath: scans/kopia.json
+  # The release pipeline appends one fully pinned entry for every required
+  # component in components.yaml. Missing layouts, SBOMs, or signatures stop packing.
+  # MinIO must use the official repository, tag, and multi-platform index digest
+  # recorded in build/minio/source.lock.yaml; the accepted-risk record travels
+  # with the release and does not permit latest or a third-party image.

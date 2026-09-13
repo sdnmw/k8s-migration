@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "minio-snsd.name" . }}
+  labels:
+    {{- include "minio-snsd.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "minio-snsd.name" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "minio-snsd.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        k8tz.io/inject: "false"
+      labels:
+        app.kubernetes.io/name: {{ include "minio-snsd.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: minio
+          image: {{ include "minio-snsd.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            {{- if .Values.tls.enabled }}
+            - --certs-dir
+            - /etc/minio/certs
+            {{- end }}
+            - server
+            - /data
+            - --address
+            - :9000
+            - --console-address
+            - :9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: {secretKeyRef: {name: {{ required "credentialsSecret is required" .Values.credentialsSecret }}, key: access-key}}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: {secretKeyRef: {name: {{ .Values.credentialsSecret }}, key: secret-key}}
+          ports:
+            - {name: s3, containerPort: 9000, protocol: TCP}
+            - {name: console, containerPort: 9001, protocol: TCP}
+          startupProbe:
+            httpGet: {path: /minio/health/live, port: s3, scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled }}}
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet: {path: /minio/health/ready, port: s3, scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled }}}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /minio/health/live, port: s3, scheme: {{ ternary "HTTPS" "HTTP" .Values.tls.enabled }}}
+            periodSeconds: 20
+          resources: {{ toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+            {{- if .Values.tls.enabled }}
+            - {name: tls, mountPath: /etc/minio/certs, readOnly: true}
+            {{- end }}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+        {{- if .Values.tls.enabled }}
+        - name: tls
+          secret:
+            secretName: {{ required "tls.existingSecret is required when TLS is enabled" .Values.tls.existingSecret }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        annotations:
+          helm.sh/resource-policy: keep
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ required "persistence.storageClass must be a discovered SmartX ELF CSI StorageClass" .Values.persistence.storageClass | quote }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

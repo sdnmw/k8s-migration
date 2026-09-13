@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "minio-snsd.name" . }}
+  labels:
+    {{- include "minio-snsd.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations: {{ toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ include "minio-snsd.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - {name: s3, port: {{ .Values.service.apiPort }}, targetPort: s3}
+    - {name: console, port: {{ .Values.service.consolePort }}, targetPort: console}
+

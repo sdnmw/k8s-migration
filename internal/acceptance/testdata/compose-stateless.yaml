@@ -1,0 +1,8 @@
+name: compose-stateless
+services:
+  web:
+    image: nginx:1.29-alpine
+    ports:
+      - "8080:80"
+    environment:
+      APP_MODE: acceptance

@@ -1,0 +1,24 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Go
+/bin/
+/dist/
+/coverage/
+*.out
+
+# Node
+/web/node_modules/
+/web/dist/
+/web/coverage/
+*.tsbuildinfo
+
+# Local runtime state
+/.cache/
+/.data/
+/.playwright-cli/
+/output/
+/.idea/
+/.vscode/

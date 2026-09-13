@@ -1,0 +1,5 @@
+{
+  "application": "nacos-springboot-migration-demo",
+  "databaseRecords": 2,
+  "nacosRegistered": true
+}

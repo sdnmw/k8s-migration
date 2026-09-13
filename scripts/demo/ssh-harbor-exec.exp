@@ -1,0 +1,44 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+if {$argc < 3 || ![info exists env(DEMO_SSH_PASSWORD_FILE)] || ![info exists env(HARBOR_PASSWORD_FILE)] || ![info exists env(HARBOR_USERNAME_FILE)]} {
+  puts stderr "usage: ssh-harbor-exec.exp HOST REGISTRY COMMAND"
+  exit 2
+}
+
+proc read_secret {name} {
+  set file [open $name r]
+  set value [string trim [read $file]]
+  close $file
+  return $value
+}
+
+set host [lindex $argv 0]
+set registry [lindex $argv 1]
+set command [join [lrange $argv 2 end] " "]
+set ssh_password [read_secret $env(DEMO_SSH_PASSWORD_FILE)]
+set harbor_password [read_secret $env(HARBOR_PASSWORD_FILE)]
+set harbor_username [read_secret $env(HARBOR_USERNAME_FILE)]
+set remote "printf 'HARBOR_PASSWORD_READY\\n'; read -r registry_password; printf '%s' \"\$registry_password\" | docker login '$registry' -u '$harbor_username' --password-stdin >/dev/null 2>&1; printf 'HARBOR_LOGIN_DONE\\n'; $command"
+
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$host $remote
+expect {
+  "*assword:*" {
+    send -- "$ssh_password\r"
+    exp_continue
+  }
+  "HARBOR_PASSWORD_READY*" {
+    log_user 0
+    send -- "$harbor_password\r"
+    exp_continue
+  }
+  "HARBOR_LOGIN_DONE*" { log_user 1; exp_continue }
+  eof {}
+  timeout {
+    puts stderr "SSH Harbor command timed out"
+    exit 124
+  }
+}
+
+catch wait result
+exit [lindex $result 3]

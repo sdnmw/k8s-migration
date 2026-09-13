@@ -1,0 +1,21 @@
+#!/usr/bin/expect -f
+
+set timeout 180
+if {$argc != 3 || ![info exists env(DEMO_SSH_PASSWORD_FILE)]} {
+  puts stderr "usage: scp-to.exp SOURCE HOST DESTINATION"
+  exit 2
+}
+set file [open $env(DEMO_SSH_PASSWORD_FILE) r]
+set password [string trim [read $file]]
+close $file
+set source [lindex $argv 0]
+set host [lindex $argv 1]
+set destination [lindex $argv 2]
+spawn scp -r -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null $source root@$host:$destination
+expect {
+  "*assword:*" { send -- "$password\r"; exp_continue }
+  eof {}
+  timeout { puts stderr "SCP timed out"; exit 124 }
+}
+catch wait result
+exit [lindex $result 3]

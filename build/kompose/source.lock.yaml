@@ -1,0 +1,14 @@
+apiVersion: migration.smartx.com/v1alpha1
+kind: SourceLock
+component: kompose
+version: v1.38.0
+source:
+  repository: https://github.com/kubernetes/kompose
+  release: https://github.com/kubernetes/kompose/releases/tag/v1.38.0
+binaries:
+  linux-amd64:
+    url: https://github.com/kubernetes/kompose/releases/download/v1.38.0/kompose-linux-amd64
+    sha256: 65a6a720605bead3964e8b22d423a0763de451a236fe03de902e366cf3d9c147
+  linux-arm64:
+    url: https://github.com/kubernetes/kompose/releases/download/v1.38.0/kompose-linux-arm64
+    sha256: 24faf6212ec34d325e4724118098d34b9dd321cda2d9ca22efa0f04cdb909894

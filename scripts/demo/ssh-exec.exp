@@ -1,0 +1,34 @@
+#!/usr/bin/expect -f
+
+set timeout 600
+
+if {$argc < 2} {
+  puts stderr "usage: ssh-exec.exp HOST COMMAND"
+  exit 2
+}
+if {![info exists env(DEMO_SSH_PASSWORD_FILE)]} {
+  puts stderr "DEMO_SSH_PASSWORD_FILE is required"
+  exit 2
+}
+
+set host [lindex $argv 0]
+set command [join [lrange $argv 1 end] " "]
+set file [open $env(DEMO_SSH_PASSWORD_FILE) r]
+set password [string trim [read $file]]
+close $file
+
+spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@$host $command
+expect {
+  "*assword:*" {
+    send -- "$password\r"
+    exp_continue
+  }
+  eof {}
+  timeout {
+    puts stderr "SSH command timed out"
+    exit 124
+  }
+}
+
+catch wait result
+exit [lindex $result 3]

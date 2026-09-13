@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: 192.168.112.30/sks/demo-postgres:15-alpine
+    environment:
+      POSTGRES_DB: demo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo-postgres-password
+    expose:
+      - "5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  nacos:
+    image: 192.168.112.30/sks/demo-nacos:v2.4.3
+    environment:
+      MODE: standalone
+      NACOS_AUTH_ENABLE: "false"
+    expose:
+      - "8848"
+    ports:
+      - "18848:8848"
+    volumes:
+      - nacos-data:/home/nacos/data
+
+  app:
+    image: 192.168.112.30/sks/demo-spring-nacos:1.0.0
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: demo
+      DB_USER: demo
+      DB_PASSWORD: demo-postgres-password
+      NACOS_SERVER: nacos:8848
+    depends_on:
+      - postgres
+      - nacos
+    ports:
+      - "18080:8080"
+
+volumes:
+  postgres-data:
+  nacos-data:

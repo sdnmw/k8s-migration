@@ -1,0 +1,25 @@
+apiVersion: migration.smartx.com/v1alpha1
+kind: OfflineComponentCatalog
+bundleVersion: 0.1.0
+components:
+  - {name: platform-api, owner: platform, releaseWindow: 16, required: true}
+  - {name: platform-worker, owner: platform, releaseWindow: 16, required: true}
+  - {name: platform-web, owner: platform, releaseWindow: 16, required: true}
+  - {name: postgresql, owner: platform, releaseWindow: 16, required: true}
+  - name: minio
+    owner: object-storage
+    releaseWindow: 17
+    required: true
+    sourcePolicy: build/minio/source.lock.yaml
+    releaseStatus: ACCEPTED_RISK
+  - {name: velero, owner: kubernetes-migration, releaseWindow: 19, required: true}
+  - {name: velero-plugin-for-aws, owner: kubernetes-migration, releaseWindow: 19, required: true}
+  - {name: nfsplugin, owner: storage, releaseWindow: 18, required: true}
+  - {name: csi-provisioner, owner: storage, releaseWindow: 18, required: true}
+  - {name: csi-resizer, owner: storage, releaseWindow: 18, required: true}
+  - {name: csi-node-driver-registrar, owner: storage, releaseWindow: 18, required: true}
+  - {name: livenessprobe, owner: storage, releaseWindow: 18, required: true}
+  - {name: nfs-probe-helper, owner: storage, releaseWindow: 18, required: true}
+  - {name: kompose, owner: compose-migration, releaseWindow: 22, required: true, sourcePolicy: build/kompose/source.lock.yaml}
+  - {name: kopia, owner: data-movement, releaseWindow: 23, required: true, sourcePolicy: build/kopia/source.lock.yaml}
+  - {name: migration-helper, owner: data-movement, releaseWindow: 20, required: true}

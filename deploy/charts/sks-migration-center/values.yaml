@@ -1,0 +1,107 @@
+global:
+  storageClass: ""
+  imagePullSecrets: []
+
+image:
+  api:
+    repository: registry.example.invalid/sks-migration-center/api
+    digest: ""
+  worker:
+    repository: registry.example.invalid/sks-migration-center/worker
+    digest: ""
+  web:
+    repository: registry.example.invalid/sks-migration-center/web
+    digest: ""
+  postgres:
+    repository: registry.example.invalid/library/postgres
+    digest: ""
+  pullPolicy: IfNotPresent
+
+addonImages:
+  minio:
+    repository: registry.example.invalid/sks-migration-center/minio
+    digest: ""
+  velero:
+    repository: registry.example.invalid/sks-migration-center/velero
+    digest: ""
+  veleroAWSPlugin:
+    repository: registry.example.invalid/sks-migration-center/velero-plugin-for-aws
+    digest: ""
+  nfsPlugin:
+    repository: registry.example.invalid/sks-migration-center/nfsplugin
+    digest: ""
+  nfsProvisioner:
+    repository: registry.example.invalid/sks-migration-center/csi-provisioner
+    digest: ""
+  nfsResizer:
+    repository: registry.example.invalid/sks-migration-center/csi-resizer
+    digest: ""
+  nfsLiveness:
+    repository: registry.example.invalid/sks-migration-center/livenessprobe
+    digest: ""
+  nfsRegistrar:
+    repository: registry.example.invalid/sks-migration-center/csi-node-driver-registrar
+    digest: ""
+  nfsProbe:
+    repository: registry.example.invalid/sks-migration-center/nfs-probe-helper
+    digest: ""
+  kompose:
+    repository: registry.example.invalid/sks-migration-center/kompose
+    digest: ""
+  kopia:
+    repository: registry.example.invalid/sks-migration-center/kopia
+    digest: ""
+
+replicas:
+  api: 1
+  worker: 1
+  web: 1
+
+service:
+  type: ClusterIP
+  port: 80
+
+postgres:
+  database: migration
+  username: migration
+  storageSize: 20Gi
+
+secrets:
+  # This Secret is supplied by the installer. The chart never creates or embeds credentials.
+  existingSecret: sks-migration-center-secrets
+  adminPasswordKey: admin-password
+  masterKeyKey: master-key
+  databaseURLKey: database-url
+  postgresPasswordKey: postgres-password
+
+config:
+  logLevel: info
+  sessionTTL: 8h
+  cookieSecure: true
+  workerHeartbeatInterval: 10s
+  workerPollInterval: 2s
+  workerLeaseDuration: 30s
+  workerRetryDelay: 10s
+
+resources:
+  api:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  worker:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  web:
+    requests: {cpu: 25m, memory: 32Mi}
+    limits: {cpu: 250m, memory: 128Mi}
+  postgres:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
+
+networkPolicy:
+  enabled: true
+
+monitoring:
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s

@@ -1,0 +1,14 @@
+apiVersion: migration.smartx.com/v1alpha1
+kind: SourceLock
+component: kopia
+version: v0.23.1
+source:
+  repository: https://github.com/kopia/kopia
+  release: https://github.com/kopia/kopia/releases/tag/v0.23.1
+binaries:
+  linux-amd64:
+    url: https://github.com/kopia/kopia/releases/download/v0.23.1/kopia-0.23.1-linux-x64.tar.gz
+    sha256: 416d0f84a3dbb321a8b2d8f0997b1a0a6e915babe79ee76fa6e4d2bd1e1c5178
+  linux-arm64:
+    url: https://github.com/kopia/kopia/releases/download/v0.23.1/kopia-0.23.1-linux-arm64.tar.gz
+    sha256: a4ffbc019e0b0f932e2632054e73ec521dc1e80172a00095369c53ecf4e5a6cb

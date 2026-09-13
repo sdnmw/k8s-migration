@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    business.example/owner: platform
+  name: api
+  namespace: business-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/zone
+                operator: In
+                values:
+                - rack-a
+      containers:
+      - image: harbor.example.local/migrated/team/api:v1
+        name: api
+      nodeSelector:
+        topology.kubernetes.io/zone: rack-a
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/ingress.class: nginx
+  name: api
+  namespace: business-prod
+spec:
+  defaultBackend:
+    service:
+      name: api
+      port:
+        number: 80
+  rules:
+  - host: api.example.local
+    http:
+      paths:
+      - backend:
+          service:
+            name: api
+            port:
+              name: http
+        path: /
+        pathType: ImplementationSpecific
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: business-shared
+spec:
+  nfs:
+    path: /migrations/business
+    server: 10.60.30.60
+  storageClassName: nfs-rwx
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+  namespace: business-prod
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: smtx-elf-storageclass
+---
+apiVersion: v1
+data:
+  password: <redacted>
+kind: Secret
+metadata:
+  name: database
+  namespace: business-prod
+stringData:
+  username: <redacted>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: business-prod
+spec:
+  ports:
+  - port: 80
+    targetPort: http
+  selector:
+    app: api
+  type: NodePort

@@ -1,0 +1,58 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.5
+          cache: true
+      - run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./cmd/... ./internal/...
+      - run: go test ./cmd/... ./internal/...
+      - run: GOPROXY=off go test ./internal/offline ./internal/addon
+      - run: go build ./cmd/...
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.20.0
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run api:lint
+      - run: npm run test
+      - run: npm run build
+
+  kind-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.5
+          cache: true
+      - name: Install verified Kind
+        run: |
+          curl --fail --location --retry 5 -o kind-linux-amd64 https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-linux-amd64
+          curl --fail --location --retry 5 -o kind-linux-amd64.sha256sum https://github.com/kubernetes-sigs/kind/releases/download/v0.32.0/kind-linux-amd64.sha256sum
+          sha256sum --check kind-linux-amd64.sha256sum
+          sudo install -m 0755 kind-linux-amd64 /usr/local/bin/kind
+      - run: docker pull docker.io/library/redis:8-alpine
+      - run: GO_BIN=go ./scripts/kind-dual-e2e.sh

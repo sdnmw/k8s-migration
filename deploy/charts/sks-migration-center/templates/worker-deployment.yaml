@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "migration.name" . }}-worker
+  labels:
+    {{- include "migration.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.replicas.worker }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "migration.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "migration.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "migration.name" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: worker
+          image: {{ include "migration.image" .Values.image.worker }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: metrics, containerPort: 9090, protocol: TCP}
+          envFrom:
+            - configMapRef: {name: {{ include "migration.name" . }}}
+          env:
+            - name: DATABASE_URL
+              valueFrom: {secretKeyRef: {name: {{ .Values.secrets.existingSecret }}, key: {{ .Values.secrets.databaseURLKey }}}}
+            - {name: CREDENTIAL_MASTER_KEY_FILE, value: /run/secrets/sks-migration/master-key}
+          volumeMounts:
+            - {name: application-secrets, mountPath: /run/secrets/sks-migration, readOnly: true}
+          resources: {{ toYaml .Values.resources.worker | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: application-secrets
+          secret:
+            secretName: {{ .Values.secrets.existingSecret }}
+            items:
+              - {key: {{ .Values.secrets.masterKeyKey }}, path: master-key}

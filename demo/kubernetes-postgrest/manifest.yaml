@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo-postgrest
+  labels:
+    app.kubernetes.io/part-of: postgrest-todo-demo
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: demo-postgrest
+type: Opaque
+stringData:
+  POSTGRES_DB: demo
+  POSTGRES_USER: demo
+  POSTGRES_PASSWORD: demo-postgres-password
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: demo-postgrest
+data:
+  01-init.sql: |
+    CREATE SCHEMA IF NOT EXISTS api;
+    CREATE TABLE IF NOT EXISTS api.todos (
+      id BIGSERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      completed BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    DO $$ BEGIN
+      CREATE ROLE web_anon NOLOGIN;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+    GRANT USAGE ON SCHEMA api TO web_anon;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON api.todos TO web_anon;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA api TO web_anon;
+    INSERT INTO api.todos(title, completed)
+      SELECT 'PostgREST source database initialized', true
+      WHERE NOT EXISTS (SELECT 1 FROM api.todos WHERE title = 'PostgREST source database initialized');
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: demo-postgrest
+  labels:
+    app.kubernetes.io/name: postgrest-todo
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi
+  storageClassName: smtx-elf-csi-driver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: demo-postgrest
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: demo-postgrest
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: 192.168.112.30/neutree1/library/postgres:13
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+        - name: init
+          configMap:
+            name: postgres-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgrest
+  namespace: demo-postgrest
+spec:
+  type: NodePort
+  selector:
+    app: postgrest
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      nodePort: 31080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgrest
+  namespace: demo-postgrest
+  labels:
+    app: postgrest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgrest
+  template:
+    metadata:
+      labels:
+        app: postgrest
+    spec:
+      containers:
+        - name: postgrest
+          image: 192.168.112.30/neutree1/postgrest/postgrest:v14.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGRST_DB_URI
+              value: postgres://demo:demo-postgres-password@postgres:5432/demo
+            - name: PGRST_DB_SCHEMAS
+              value: api
+            - name: PGRST_DB_ANON_ROLE
+              value: web_anon
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /todos?limit=1
+              port: 3000
+            initialDelaySeconds: 8
+            periodSeconds: 5

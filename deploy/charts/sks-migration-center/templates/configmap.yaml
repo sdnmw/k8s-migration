@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "migration.name" . }}
+  labels:
+    {{- include "migration.labels" . | nindent 4 }}
+data:
+  APP_ENV: production
+  APP_VERSION: {{ .Chart.AppVersion | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  SESSION_TTL: {{ .Values.config.sessionTTL | quote }}
+  COOKIE_SECURE: {{ .Values.config.cookieSecure | quote }}
+  WORKER_HEARTBEAT_INTERVAL: {{ .Values.config.workerHeartbeatInterval | quote }}
+  WORKER_POLL_INTERVAL: {{ .Values.config.workerPollInterval | quote }}
+  WORKER_LEASE_DURATION: {{ .Values.config.workerLeaseDuration | quote }}
+  WORKER_RETRY_DELAY: {{ .Values.config.workerRetryDelay | quote }}
+  WORKER_METRICS_ADDR: ":9090"
+  MINIO_IMAGE: {{ include "migration.image" .Values.addonImages.minio | quote }}
+  NFS_PLUGIN_IMAGE: {{ include "migration.image" .Values.addonImages.nfsPlugin | quote }}
+  NFS_PROVISIONER_IMAGE: {{ include "migration.image" .Values.addonImages.nfsProvisioner | quote }}
+  NFS_RESIZER_IMAGE: {{ include "migration.image" .Values.addonImages.nfsResizer | quote }}
+  NFS_LIVENESS_IMAGE: {{ include "migration.image" .Values.addonImages.nfsLiveness | quote }}
+  NFS_REGISTRAR_IMAGE: {{ include "migration.image" .Values.addonImages.nfsRegistrar | quote }}
+  NFS_PROBE_IMAGE: {{ include "migration.image" .Values.addonImages.nfsProbe | quote }}
+  VELERO_IMAGE: {{ include "migration.image" .Values.addonImages.velero | quote }}
+  VELERO_AWS_PLUGIN_IMAGE: {{ include "migration.image" .Values.addonImages.veleroAWSPlugin | quote }}
+  STAGING_HELPER_IMAGE: {{ include "migration.image" .Values.addonImages.nfsProbe | quote }}
+  KOMPOSE_IMAGE: {{ include "migration.image" .Values.addonImages.kompose | quote }}
+  KOPIA_IMAGE: {{ include "migration.image" .Values.addonImages.kopia | quote }}

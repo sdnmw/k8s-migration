@@ -1,0 +1,9 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    volumes:
+      - redis-data:/data
+      - /srv/shop/config:/etc/shop:ro
+
+volumes:
+  redis-data: {}

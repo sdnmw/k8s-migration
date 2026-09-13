@@ -1,0 +1,11 @@
+.git
+.github
+.data
+.cache
+bin
+dist
+coverage
+web/node_modules
+web/dist
+*.log
+

@@ -1,0 +1,111 @@
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  name: api
+  namespace: business
+  uid: runtime-uid
+  resourceVersion: "99"
+  generation: 4
+  creationTimestamp: "2026-09-03T00:00:00Z"
+  annotations:
+    business.example/owner: platform
+    kubectl.kubernetes.io/last-applied-configuration: secret-runtime-copy
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: api
+        pod-template-hash: runtime-hash
+    spec:
+      nodeSelector:
+        legacy/rack: rack-a
+        deprecated/node: old
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: legacy/rack
+                    operator: In
+                    values: [rack-a]
+      containers:
+        - name: api
+          image: registry.legacy.local/team/api:v1
+status:
+  readyReplicas: 1
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: api
+  namespace: business
+  annotations:
+    kubernetes.io/ingress.class: traefik
+spec:
+  backend:
+    serviceName: api
+    servicePort: 80
+  rules:
+    - host: api.example.local
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: api
+              servicePort: http
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: business-shared
+  uid: runtime-pv
+spec:
+  storageClassName: legacy-nfs
+  nfs:
+    server: 10.20.30.60
+    path: /business
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data
+  namespace: business
+spec:
+  storageClassName: legacy-block
+  volumeName: runtime-pv
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+status:
+  phase: Bound
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: database
+  namespace: business
+data:
+  password: c2VjcmV0
+stringData:
+  username: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: business
+  uid: runtime-service
+spec:
+  type: NodePort
+  clusterIP: 10.96.0.20
+  clusterIPs: [10.96.0.20]
+  ports:
+    - port: 80
+      targetPort: http
+      nodePort: 32080
+  selector:
+    app: api
+status:
+  loadBalancer: {}

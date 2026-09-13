@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sks-migration-nfs-node
+  namespace: {{ .Release.Namespace }}
+  labels: {{ include "nfs.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {app: sks-migration-nfs-node}
+  updateStrategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: {{ .Values.node.maxUnavailable }}}}
+  template:
+    metadata:
+      labels:
+        app: sks-migration-nfs-node
+        app.kubernetes.io/name: csi-driver-nfs
+      annotations: {k8tz.io/inject: "false"}
+    spec:
+      serviceAccountName: sks-migration-nfs-node
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      priorityClassName: system-cluster-critical
+      nodeSelector: {kubernetes.io/os: linux}
+      tolerations: [{operator: Exists}]
+      containers:
+        - name: liveness-probe
+          image: {{ required "images.liveness is required" .Values.images.liveness }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: ["--csi-address=/csi/csi.sock", "--http-endpoint=localhost:29653", "--v=2"]
+          securityContext: &sidecarSecurity
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+          resources: {{ toYaml .Values.resources.sidecar | nindent 12 }}
+          volumeMounts: [{name: socket-dir, mountPath: /csi}]
+        - name: node-driver-registrar
+          image: {{ required "images.registrar is required" .Values.images.registrar }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: ["--v=2", "--csi-address=/csi/csi.sock", "--kubelet-registration-path={{ .Values.kubeletDir }}/plugins/csi-nfsplugin/csi.sock", "--timeout=60s", "--http-endpoint=localhost:19809"]
+          securityContext: *sidecarSecurity
+          resources: {{ toYaml .Values.resources.sidecar | nindent 12 }}
+          volumeMounts:
+            - {name: socket-dir, mountPath: /csi}
+            - {name: registration-dir, mountPath: /registration}
+        - name: nfs
+          image: {{ required "images.nfs is required" .Values.images.nfs }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args: ["--v={{ .Values.node.logLevel }}", "--nodeid=$(NODE_ID)", "--endpoint=unix:///csi/csi.sock", "--drivername={{ .Values.driver.name }}"]
+          env:
+            - name: NODE_ID
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          securityContext: {privileged: true, allowPrivilegeEscalation: true, capabilities: {add: [SYS_ADMIN], drop: [ALL]}}
+          resources: {{ toYaml .Values.resources.nfs | nindent 12 }}
+          livenessProbe: {httpGet: {host: localhost, path: /healthz, port: 29653}, initialDelaySeconds: 30, periodSeconds: 30, timeoutSeconds: 10, failureThreshold: 5}
+          volumeMounts:
+            - {name: socket-dir, mountPath: /csi}
+            - {name: pods-mount-dir, mountPath: "{{ .Values.kubeletDir }}/pods", mountPropagation: Bidirectional}
+      volumes:
+        - name: socket-dir
+          hostPath: {path: "{{ .Values.kubeletDir }}/plugins/csi-nfsplugin", type: DirectoryOrCreate}
+        - name: pods-mount-dir
+          hostPath: {path: "{{ .Values.kubeletDir }}/pods", type: Directory}
+        - name: registration-dir
+          hostPath: {path: "{{ .Values.kubeletDir }}/plugins_registry", type: Directory}

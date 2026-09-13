@@ -1,0 +1,7 @@
+apiVersion: v2
+name: sks-migration-center
+description: SKS Migration Center API, worker, web, and PostgreSQL base installation
+type: application
+version: 0.1.0
+appVersion: 0.1.0
+

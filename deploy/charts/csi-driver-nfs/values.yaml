@@ -1,0 +1,23 @@
+driver:
+  name: nfs.csi.k8s.io
+kubeletDir: /var/lib/kubelet
+images:
+  nfs: m.daocloud.io/registry.k8s.io/sig-storage/nfsplugin@sha256:1eb5a85180a4ad0193a31d319b163f35c8c1857794ebaac71d8abcdd5a0516d3
+  provisioner: m.daocloud.io/registry.k8s.io/sig-storage/csi-provisioner@sha256:a4b0b1a37605b7b04a293e136edf7006ec1786a8eb3f4e5a945f81d667dcc371
+  resizer: m.daocloud.io/registry.k8s.io/sig-storage/csi-resizer@sha256:a2d40c1c3ccb0c48b467125a6652c4dd5dcbf0d295641c9989581cfc690f6cf3
+  liveness: m.daocloud.io/registry.k8s.io/sig-storage/livenessprobe@sha256:06da0d5b8908072f2e4522692aee8dc119fba7247a9658497e1153992cd777e9
+  registrar: m.daocloud.io/registry.k8s.io/sig-storage/csi-node-driver-registrar@sha256:f9de845b170155199f2a2a3f9531cf13d78e31235e9db6b6582a8b0db0a50dad
+imagePullPolicy: IfNotPresent
+controller:
+  replicas: 1
+  logLevel: 5
+node:
+  logLevel: 5
+  maxUnavailable: 1
+resources:
+  sidecar:
+    requests: {cpu: 10m, memory: 20Mi}
+    limits: {memory: 400Mi}
+  nfs:
+    requests: {cpu: 10m, memory: 20Mi}
+    limits: {memory: 300Mi}

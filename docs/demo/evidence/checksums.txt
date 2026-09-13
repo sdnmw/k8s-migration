@@ -1,0 +1,6 @@
+Kubernetes source records  b85b4c439cc346fe77cadb82c8af2f31ecae475d48b1b0094ba734ec8374c133
+Kubernetes target records  b85b4c439cc346fe77cadb82c8af2f31ecae475d48b1b0094ba734ec8374c133
+Compose source records     25779d872167be899b633142b1fb21b2012bc206f9e8f9a7573fc3d42658d9de
+Compose target records     25779d872167be899b633142b1fb21b2012bc206f9e8f9a7573fc3d42658d9de
+Nacos source marker        e480cf62ff782b2429e41a83c1e7b26a425959ba92306dc1da59174876a6ee94
+Nacos target marker        e480cf62ff782b2429e41a83c1e7b26a425959ba92306dc1da59174876a6ee94

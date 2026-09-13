@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18.3-bookworm}
+    environment:
+      POSTGRES_DB: migration
+      POSTGRES_USER: migration
+      POSTGRES_PASSWORD: migration
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U migration -d migration"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - migration-postgres:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: build/package/api.Dockerfile
+    environment:
+      HTTP_ADDR: :8080
+      APP_ENV: development
+      APP_VERSION: dev
+      DATABASE_URL: postgres://migration:migration@postgres:5432/migration?sslmode=disable
+      ADMIN_BOOTSTRAP_PASSWORD_FILE: /run/secrets/admin_password
+      CREDENTIAL_MASTER_KEY_FILE: /run/secrets/master_key
+      COOKIE_SECURE: "false"
+    secrets:
+      - admin_password
+      - master_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "/server", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  worker:
+    build:
+      context: .
+      dockerfile: build/package/worker.Dockerfile
+    environment:
+      APP_ENV: development
+      APP_VERSION: dev
+      DATABASE_URL: postgres://migration:migration@postgres:5432/migration?sslmode=disable
+      WORKER_HEARTBEAT_INTERVAL: 10s
+      WORKER_POLL_INTERVAL: 2s
+      WORKER_LEASE_DURATION: 30s
+      WORKER_RETRY_DELAY: 10s
+      CREDENTIAL_MASTER_KEY_FILE: /run/secrets/master_key
+      STAGING_HELPER_IMAGE: ${STAGING_HELPER_IMAGE:-docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662}
+      KOMPOSE_IMAGE: ${KOMPOSE_IMAGE:-registry.example.invalid/sks-migration-center/kompose@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+      KOPIA_IMAGE: ${KOPIA_IMAGE:-registry.example.invalid/sks-migration-center/kopia@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    secrets:
+      - master_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: build/package/web.Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:8080"
+
+volumes:
+  migration-postgres:
+
+secrets:
+  admin_password:
+    file: ./.data/secrets/admin-password
+  master_key:
+    file: ./.data/secrets/master-key

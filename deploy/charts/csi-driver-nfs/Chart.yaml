@@ -1,0 +1,8 @@
+apiVersion: v2
+name: csi-driver-nfs
+description: Offline NFS CSI Driver bundle for SKS Migration Center
+type: application
+version: 4.13.4
+appVersion: 4.13.4
+annotations:
+  source: https://github.com/kubernetes-csi/csi-driver-nfs/tree/v4.13.4/charts/latest/csi-driver-nfs

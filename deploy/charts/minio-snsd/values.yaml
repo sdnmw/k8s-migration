@@ -1,0 +1,25 @@
+image:
+  repository: registry.example.invalid/migration/minio
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+credentialsSecret: minio-root-credentials
+tls:
+  enabled: true
+  existingSecret: minio-tls
+
+persistence:
+  storageClass: ""
+  size: 100Gi
+
+service:
+  type: ClusterIP
+  annotations: {}
+  apiPort: 9000
+  consolePort: 9001
+
+resources:
+  requests: {cpu: 250m, memory: 512Mi}
+  limits: {cpu: "2", memory: 2Gi}
+

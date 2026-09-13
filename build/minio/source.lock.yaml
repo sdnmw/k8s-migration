@@ -1,0 +1,33 @@
+apiVersion: migration.smartx.com/v1alpha1
+kind: MinIOSourceLock
+repository: https://github.com/minio/minio.git
+ref: RELEASE.2025-09-07T16-13-09Z
+commit: 07c3a429bfed433e49018cb0f78a52145d4bedeb
+license: AGPL-3.0-only
+sourceOfferRequired: true
+officialImage:
+  repository: docker.io/minio/minio
+  tag: RELEASE.2025-09-07T16-13-09Z
+  digest: sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+releaseAllowed: true
+securityGate:
+  status: ACCEPTED_RISK
+  checkedAt: "2026-09-04T00:00:00Z"
+  blockers:
+    - id: GHSA-hv4r-mvr4-25vw
+      severity: HIGH
+      reason: Selected official Community image is affected; risk accepted for the one-time migration repository.
+    - id: GHSA-9c4q-hq6p-c237
+      severity: HIGH
+      reason: Selected official Community image is affected; risk accepted for the one-time migration repository.
+    - id: GHSA-h749-fxx7-pwpg
+      severity: HIGH
+      reason: Selected official Community image is affected; risk accepted for the one-time migration repository.
+    - id: GHSA-3rh2-v3gr-35p9
+      severity: HIGH
+      reason: Selected official Community image is affected; risk accepted for the one-time migration repository.
+riskAcceptance:
+  accepted: true
+  scope: Ephemeral single-instance migration repository deployed in the target workload cluster.
+  rationale: Operator explicitly accepts the known findings for this one-time migration tool and requested the official image.
+  acceptedAt: "2026-09-04T00:00:00Z"

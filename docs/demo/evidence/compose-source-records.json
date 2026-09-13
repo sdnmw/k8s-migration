@@ -1,0 +1,12 @@
+[
+  {
+    "created_at": "2026-09-06T15:24:32.633+00:00",
+    "id": 1,
+    "message": "SPRING-NACOS-SOURCE-SEED"
+  },
+  {
+    "created_at": "2026-09-06T15:25:12.646+00:00",
+    "id": 2,
+    "message": "COMPOSE-MIGRATION-PROOF-20260906"
+  }
+]
