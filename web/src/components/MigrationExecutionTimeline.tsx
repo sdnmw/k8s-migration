@@ -16,7 +16,7 @@ export default function MigrationExecutionTimeline({ value, fallbackEvents = [],
   return <div className="execution-timeline">
     {diagnosis && <Alert className="diagnosis-alert" showIcon type={diagnosisType} title={diagnosis.title} description={<>
       {diagnosis.reason && <div>{diagnosis.reason}</div>}
-      {diagnosis.lastSuccessfulStep && <div>最后成功步骤：{diagnosis.lastSuccessfulStep}</div>}
+      {diagnosis.lastSuccessfulStep && <div>最后成功步骤：{stepLabel(diagnosis.lastSuccessfulStep)}</div>}
       {diagnosis.remediation && <div><strong>建议：</strong>{diagnosis.remediation}</div>}
     </>} />}
     <Timeline pending={loading ? '正在读取执行证据…' : undefined} items={steps.map((item) => ({
@@ -52,8 +52,14 @@ function EventRows({ events }: { events?: MigrationEvent[] | null }) {
   if (!events?.length) return null
   return <div className="timeline-event-rows">{events.map((event) => <div className="timeline-event-row" key={event.id}>
     <Badge status={event.severity === 'ERROR' ? 'error' : event.severity === 'WARNING' ? 'warning' : 'processing'} />
-    <time>{formatTime(event.createdAt)}</time><Tag>{event.type}</Tag><span>{event.message}</span>
+    <time>{formatTime(event.createdAt)}</time><Tag>{event.type}</Tag><span>{eventMessage(event)}</span>
   </div>)}</div>
+}
+
+function stepLabel(value: string) { return labels[value as MigrationStep['type']] ?? value }
+function eventMessage(event: MigrationEvent) {
+  if (event.type === 'VALIDATION_RECONCILED') return '目标应用和必需资源复检全部通过'
+  return event.message
 }
 
 function stepColor(status: MigrationStep['status']) { return status === 'SUCCEEDED' ? 'green' : status === 'FAILED' ? 'red' : status === 'RUNNING' ? 'blue' : 'gray' }

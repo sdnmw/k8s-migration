@@ -132,16 +132,44 @@ func VerifyDirectory(root string) (BundleManifest, error) {
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return BundleManifest{}, errors.New("bundle manifest has trailing content")
 	}
-	actual, _, err := BuildManifest(root)
+	lockFile, err := os.Open(filepath.Join(root, ImageLockName))
+	if err != nil {
+		return BundleManifest{}, fmt.Errorf("open image lock: %w", err)
+	}
+	lock, err := LoadImageLock(lockFile)
+	_ = lockFile.Close()
 	if err != nil {
 		return BundleManifest{}, err
 	}
-	if expected.BundleVersion != actual.BundleVersion || len(expected.Files) != len(actual.Files) {
-		return BundleManifest{}, errors.New("bundle file inventory does not match manifest")
+	if expected.BundleVersion != lock.BundleVersion {
+		return BundleManifest{}, fmt.Errorf("bundle version mismatch: manifest=%s image-lock=%s", expected.BundleVersion, lock.BundleVersion)
 	}
-	for index := range expected.Files {
-		if expected.Files[index] != actual.Files[index] {
-			return BundleManifest{}, fmt.Errorf("bundle file verification failed for %s", expected.Files[index].Path)
+	if err := verifyLockedAssets(root, lock); err != nil {
+		return BundleManifest{}, err
+	}
+	seen := make(map[string]struct{}, len(expected.Files))
+	for _, file := range expected.Files {
+		clean := filepath.Clean(filepath.FromSlash(file.Path))
+		if file.Path == "" || clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || file.Path == ManifestName || file.Path == ChecksumsName {
+			return BundleManifest{}, fmt.Errorf("bundle manifest contains invalid file path %q", file.Path)
+		}
+		if _, exists := seen[file.Path]; exists {
+			return BundleManifest{}, fmt.Errorf("bundle manifest contains duplicate file path %q", file.Path)
+		}
+		seen[file.Path] = struct{}{}
+		info, statErr := os.Lstat(filepath.Join(root, clean))
+		if statErr != nil {
+			return BundleManifest{}, fmt.Errorf("bundle file verification failed for %s: %w", file.Path, statErr)
+		}
+		if !info.Mode().IsRegular() {
+			return BundleManifest{}, fmt.Errorf("bundle file verification failed for %s: expected a regular file", file.Path)
+		}
+		checksum, size, checksumErr := checksumFile(filepath.Join(root, clean))
+		if checksumErr != nil {
+			return BundleManifest{}, fmt.Errorf("bundle file verification failed for %s: %w", file.Path, checksumErr)
+		}
+		if checksum != file.SHA256 || size != file.Size {
+			return BundleManifest{}, fmt.Errorf("bundle file verification failed for %s: checksum or size mismatch", file.Path)
 		}
 	}
 	wantChecksums := checksumsFor(expected.Files, manifestBytes)

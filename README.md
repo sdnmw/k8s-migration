@@ -36,7 +36,7 @@ cd sks-migration-center-0.1.0
 当前发行归档 SHA-256 为：
 
 ```text
-faa9fe0a22c457a9528a418899c9f9418a08be5a31bf7ad34d2385953224b5cb
+9361d6f020c723e73365af489904e8c69c575f238762ebd93719261645906a07
 ```
 
 ### 3. 准备凭据文件
@@ -56,12 +56,15 @@ chmod 0600 /secure/sks-migration/harbor-username \
 
 ```bash
 ./deploy.sh \
-  --harbor-address https://harbor.example.com \
+  --harbor-address 192.168.112.28 \
   --harbor-project sks-migration \
   --harbor-username-file /secure/sks-migration/harbor-username \
   --harbor-password-file /secure/sks-migration/harbor-password \
-  --sks-kubeconfig /secure/sks-migration/target-sks.yaml
+  --sks-kubeconfig /secure/sks-migration/target-sks.yaml \
+  --insecure-registry
 ```
+
+上例的 `--insecure-registry` 仅用于实验室自签名或不受信任证书的 Harbor；受信任 HTTPS Harbor 不需要该参数。安装器严格校验离线清单中登记的文件和镜像，但允许解压目录中额外放置 kubeconfig、凭据文件或下载时保留的原始压缩包；这些额外文件不会参与信任判断。
 
 安装器会依次完成：
 

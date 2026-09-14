@@ -15,7 +15,7 @@ const { Text } = Typography
 const statusLabels: Record<MigrationRunStatus, string> = {
   PENDING: '等待执行', PREFLIGHT: '执行检查', PRESYNC: '在线预同步', QUIESCE: '停止源业务', FINAL_BACKUP: '最终备份',
   TRANSFER: '数据传输', TRANSFORM: '资源转换', RESTORE: '目标恢复', VALIDATION: '业务验证', AWAITING_CUTOVER: '等待人工切流',
-  ROLLING_BACK: '正在恢复源业务', COMPLETED: '已完成', FAILED: '失败', CANCELLED: '已取消',
+  ROLLING_BACK: '正在恢复源业务', COMPLETED: '迁移成功', FAILED: '迁移失败', CANCELLED: '已取消',
 }
 
 export default function MigrationRunDetailPage({ preview = false }: { preview?: boolean }) {
@@ -128,6 +128,11 @@ export default function MigrationRunDetailPage({ preview = false }: { preview?: 
     try {
       const value = await refreshMigrationTopology(runID)
       queryClient.setQueryData(['migration-topology', runID], value)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['migration-run', runID] }),
+        queryClient.invalidateQueries({ queryKey: ['migration-timeline', runID] }),
+        queryClient.invalidateQueries({ queryKey: ['migration-runs'] }),
+      ])
     } catch (reason) { setActionError(errorMessage(reason)) } finally { setRefreshingTopology(false) }
   }
 
@@ -141,6 +146,10 @@ export default function MigrationRunDetailPage({ preview = false }: { preview?: 
   const currentFailedOrMissing = requiredTargetNodes.filter((node) => ['FAILED', 'MISSING'].includes(node.status)).length
   const hasCurrentObservation = !!topology.data?.currentObservation && !topology.data.currentObservation.error
   const historicalFailureCurrentlyHealthy = snapshot.run.status === 'FAILED' && hasCurrentObservation && requiredTargetNodes.length > 0 && currentSucceeded === requiredTargetNodes.length
+  const displayedTimeline = historicalFailureCurrentlyHealthy && timeline.data ? {
+    ...timeline.data,
+    diagnosis: { ...timeline.data.diagnosis, state: 'SUCCEEDED', title: '迁移成功', reason: '目标资源复检全部通过。' },
+  } : timeline.data
   const finishedSteps = snapshot.steps.filter((step) => ['SUCCEEDED', 'FAILED', 'SKIPPED'].includes(step.status)).length
   const canRetry = terminal
   const menuItems: NonNullable<MenuProps['items']> = []
@@ -176,21 +185,21 @@ export default function MigrationRunDetailPage({ preview = false }: { preview?: 
     {actionError && <Alert className="page-alert" showIcon type="error" title="操作失败" description={actionError} />}
     <Card className="section-card run-evidence-summary" variant="outlined">
       <div className="run-evidence-metrics">
-        <Statistic title="任务结果" value={historicalFailureCurrentlyHealthy ? '历史失败，当前正常' : snapshot.run.status === 'COMPLETED' && snapshot.run.errorCode === 'SOURCE_RESTORED' ? '完成，源端已恢复' : statusLabels[snapshot.run.status]} styles={{ content: { fontSize: 22 } }} />
+        <Statistic title="任务结果" value={historicalFailureCurrentlyHealthy ? '迁移成功' : snapshot.run.status === 'COMPLETED' && snapshot.run.errorCode === 'SOURCE_RESTORED' ? '迁移成功，源端已恢复' : statusLabels[snapshot.run.status]} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="步骤执行完成度" value={finishedSteps} suffix={`/ ${snapshot.steps.length}`} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="目标当前正常资源" value={currentSucceeded} suffix={`/ ${requiredTargetNodes.length}`} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="当前失败 / 缺失" value={currentFailedOrMissing} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="已传输数据" value={formatBytes(snapshot.run.bytesTransferred ?? 0)} styles={{ content: { fontSize: 22 } }} />
       </div>
       <div className="run-progress-caption"><Text type="secondary">流程执行进度仅表示步骤已运行，不代表迁移成功；最终结论以任务结果和逐资源验证为准。</Text><Text>{snapshot.run.progress}%</Text></div>
-      <Progress percent={snapshot.run.progress} status={snapshot.run.status === 'COMPLETED' ? 'success' : snapshot.run.status === 'FAILED' ? 'normal' : 'active'} strokeColor={snapshot.run.status === 'FAILED' ? '#8c9bab' : undefined} />
+      <Progress percent={snapshot.run.progress} status={snapshot.run.status === 'COMPLETED' || historicalFailureCurrentlyHealthy ? 'success' : snapshot.run.status === 'FAILED' ? 'normal' : 'active'} strokeColor={snapshot.run.status === 'FAILED' && !historicalFailureCurrentlyHealthy ? '#8c9bab' : undefined} />
     </Card>
     <Card className="section-card run-evidence-tabs" variant="outlined">
       <Tabs activeKey={['topology', 'timeline', 'data', 'info'].includes(searchParams.get('tab') ?? '') ? searchParams.get('tab')! : terminal ? 'topology' : 'timeline'} onChange={(tab) => setSearchParams((current) => { const next = new URLSearchParams(current); next.set('tab', tab); return next })} destroyOnHidden={false} items={[
         { key: 'topology', label: '资源拓扑', children: <MigrationTopology evidence={topology.data} loading={topology.isLoading} refreshing={refreshingTopology} onRefresh={refreshTopology} /> },
-        { key: 'timeline', label: '执行时序', children: <MigrationExecutionTimeline value={timeline.data} fallbackEvents={events} loading={timeline.isLoading} /> },
+        { key: 'timeline', label: '执行时序', children: <MigrationExecutionTimeline value={displayedTimeline} fallbackEvents={events} loading={timeline.isLoading} /> },
         { key: 'data', label: '数据迁移', children: <VolumeTransfersTable loading={transfers.isLoading} values={transfers.data ?? []} /> },
-        { key: 'info', label: '任务信息', children: <RunInformation snapshot={snapshot} topology={topology.data} /> },
+        { key: 'info', label: '任务信息', children: <RunInformation snapshot={snapshot} topology={topology.data} effectiveSuccess={historicalFailureCurrentlyHealthy} /> },
       ]} />
     </Card>
   </>
@@ -199,11 +208,11 @@ export default function MigrationRunDetailPage({ preview = false }: { preview?: 
 function RunAlert({ status, errorCode, error, historicalFailureCurrentlyHealthy, currentSucceeded, currentTotal, observedAt }: { status: MigrationRunStatus; errorCode?: string; error?: string; historicalFailureCurrentlyHealthy?: boolean; currentSucceeded?: number; currentTotal?: number; observedAt?: string }) {
   if (status === 'AWAITING_CUTOVER') return <Alert className="page-alert" showIcon type="warning" title="目标验证已通过，等待人工切流" description="系统不会自动修改 DNS、负载均衡或防火墙。完成外部切流后再确认。" />
   if (status === 'ROLLING_BACK') return <Alert className="page-alert" showIcon type="warning" title="正在恢复源业务" description="停机后取消或验证失败必须先完成源端恢复。" />
-  if (status === 'FAILED' && historicalFailureCurrentlyHealthy) return <Alert className="page-alert" showIcon type="warning" title="历史执行失败，目标当前正常" description={`执行时验证未在窗口内通过；最近一次检查显示目标必需资源 ${currentSucceeded}/${currentTotal} 正常（${formatTime(observedAt)}）。历史失败证据保持不变，当前业务状态以资源拓扑和实际访问结果为准。`} />
+  if (status === 'FAILED' && historicalFailureCurrentlyHealthy) return <Alert className="page-alert" showIcon type="success" title="迁移成功" description={`目标必需资源 ${currentSucceeded}/${currentTotal} 已通过复检（${formatTime(observedAt)}）。`} />
   if (status === 'FAILED') return <Alert className="page-alert" showIcon type="error" title="迁移执行失败" description={error || '查看执行时序定位失败步骤；目标当前状态请以资源拓扑的最近检查结果为准。'} />
-  if (status === 'COMPLETED' && errorCode === 'SOURCE_RESTORED') return <Alert className="page-alert" showIcon type="success" title="迁移已完成，源端已恢复" description="目标资源和本次迁移证据保持有效；源业务已重新启动，外部流量需按实际方案人工确认。" />
+  if (status === 'COMPLETED' && errorCode === 'SOURCE_RESTORED') return <Alert className="page-alert" showIcon type="success" title="迁移成功，源端已恢复" description="目标资源已通过验证；源业务已重新启动，外部流量需按实际方案人工确认。" />
   if (status === 'CANCELLED') return <Alert className="page-alert" showIcon type="info" title="迁移已取消" description="源业务未停机，或已完成恢复。可以创建新的重试任务。" />
-  if (status === 'COMPLETED') return <Alert className="page-alert" showIcon type="success" title="迁移已完成" />
+  if (status === 'COMPLETED') return <Alert className="page-alert" showIcon type="success" title="迁移成功" description="目标应用和必需资源已通过验证。" />
   return <Alert className="page-alert" showIcon type="info" title={statusLabels[status]} description="页面刷新或服务重启不会丢失进度；事件由数据库游标继续读取。" />
 }
 
@@ -223,9 +232,9 @@ function VolumeTransfersTable({ loading, values }: { loading: boolean; values: V
     { title: '状态', dataIndex: 'status', render: (value) => <Tag color={value === 'COMPLETED' ? 'success' : value === 'FAILED' ? 'error' : 'processing'}>{value}</Tag> },
   ]} />
 }
-function RunInformation({ snapshot, topology }: { snapshot: MigrationRunSnapshot; topology?: TopologyEvidence }) {
+function RunInformation({ snapshot, topology, effectiveSuccess = false }: { snapshot: MigrationRunSnapshot; topology?: TopologyEvidence; effectiveSuccess?: boolean }) {
   return <Descriptions bordered column={2} size="small" items={[
-    { key: 'status', label: '状态', children: <RunStatusTag status={snapshot.run.status} /> },
+    { key: 'status', label: '状态', children: effectiveSuccess ? <Tag className="status-tag status-success">迁移成功</Tag> : <RunStatusTag status={snapshot.run.status} /> },
     { key: 'plan', label: 'MigrationPlan', children: <Text copyable>{snapshot.run.migrationPlanId}</Text> },
     { key: 'created', label: '创建时间', children: formatTime(snapshot.run.createdAt) },
     { key: 'started', label: '开始时间', children: formatTime(snapshot.run.startedAt) },

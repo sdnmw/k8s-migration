@@ -70,10 +70,12 @@ offline import --directory ./bundle \
 ./deploy.sh \
   --harbor-address https://harbor.example.com \
   --harbor-project sks-migration \
-  --harbor-username-file /secure/harbor-username \
-  --harbor-password-file /secure/harbor-password \
-  --sks-kubeconfig /secure/target-sks.yaml
+  --harbor-username-file /secure/sks-migration/harbor-username \
+  --harbor-password-file /secure/sks-migration/harbor-password \
+  --sks-kubeconfig /secure/sks-migration/target-sks.yaml
 ```
+
+校验以 `bundle-manifest.json` 为权威清单：所有登记文件必须存在且大小、SHA-256 完全一致，镜像 OCI descriptor 仍逐项校验。为便于一次性部署，解压目录可以额外放置 kubeconfig、凭据文件或下载时保留的原始归档；额外文件既不会被信任，也不会导致已登记物料被误判为篡改。
 
 脚本依次校验离线包、创建或复用 Harbor 项目、导入所有 digest 固定镜像、自动发现 SmartX ELF CSI StorageClass、生成平台凭据、创建 Kubernetes imagePullSecret 和平台 Secret、部署或无损复用默认单实例 MinIO、首次安装时自动登记目标 SKS 与默认对象存储 Profile，再通过内置 Helm Go SDK 安装或升级平台。升级会保留已有对象存储登记，且不依赖可能已经修改过的管理员密码；如升级前删除过默认登记，可在对象存储页重新采用已有 MinIO。完成后输出首次管理员密码、平台 NodePort URL 和默认 MinIO S3 Endpoint。默认 MinIO PVC 为 `100Gi`，可用 `--minio-storage-size` 调整；明确只使用客户现有 S3 时可传 `--skip-default-minio`。实验室自签名 Harbor 可显式添加 `--insecure-registry`；通过 HTTPS 代理暴露界面时添加 `--cookie-secure`。需要固定既有凭据或指定非默认存储类时，可选传入 `--admin-password-file`、`--master-key-file` 和 `--storage-class`。
 

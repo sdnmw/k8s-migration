@@ -57,6 +57,15 @@ func TestBundlePackAndVerifyDetectTampering(t *testing.T) {
 	if err != nil || manifest.BundleVersion != "test-v1" || len(manifest.Files) < 7 {
 		t.Fatalf("VerifyDirectory = %+v, %v", manifest, err)
 	}
+	if err := os.WriteFile(filepath.Join(extracted, "target-sks.yaml"), []byte("user supplied kubeconfig"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extracted, "bundle.tar.gz"), []byte("original archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := VerifyDirectory(extracted); err != nil {
+		t.Fatalf("untracked deployment inputs must not invalidate the signed bundle files: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(extracted, "sbom", "api.spdx.json"), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}

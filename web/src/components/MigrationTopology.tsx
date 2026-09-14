@@ -109,7 +109,7 @@ export default function MigrationTopology({ evidence, loading, refreshing, onRef
       {(['PLANNED', 'CREATED', 'SUCCEEDED', 'WARNING', 'FAILED', 'MISSING'] as ResourceMigrationStatus[]).map((status) => <span key={status}><Badge color={statusMeta[status].color} />{statusMeta[status].label} <strong>{counts[status] ?? 0}</strong></span>)}
     </div>
     {blockingCount > 0 && <Alert className="topology-panel-notice" showIcon type="error" title="应用级迁移结论：未通过" description="存在失败、缺失或映射未生效的必需资源，不能仅依据任务终态认定迁移成功。" />}
-    {evidence?.currentObservation && !evidence.currentObservation.error && <Alert className="topology-panel-notice" showIcon type="info" title="画布显示目标集群当前状态" description="任务执行快照保持不变；资源详情同时展示执行时结论与当前观察，避免已恢复的资源仍被误标为失败。" />}
+    {evidence?.currentObservation && !evidence.currentObservation.error && <Alert className="topology-panel-notice" showIcon type="info" title="目标资源已复检" description="画布按最近一次目标集群检查结果展示；点击“刷新当前状态”可重新验证。" />}
     {limitations.length ? <Alert className="topology-panel-notice" showIcon type="warning" title={evidence?.snapshotOrigin === 'RECONSTRUCTED' ? '历史证据补建' : '证据提示'} description={[...new Set(limitations)].join('；')} /> : null}
     {evidence?.currentObservation?.error && <Alert className="topology-panel-notice" showIcon type="error" title="目标集群当前状态检查失败" description={evidence.currentObservation.error} />}
     <div className="topology-workspace">

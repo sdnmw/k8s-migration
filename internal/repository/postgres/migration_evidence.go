@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	domainmigration "github.com/smartx/sks-migration-center/internal/domain/migration"
+	"github.com/smartx/sks-migration-center/internal/repository"
 )
 
 func (r *MigrationRepository) GetTopologyEvidence(ctx context.Context, runID uuid.UUID) (domainmigration.TopologyEvidence, bool, bool, error) {
@@ -50,6 +52,52 @@ func (r *MigrationRepository) SaveCurrentTopologyObservation(ctx context.Context
 		return errors.New("topology evidence does not exist")
 	}
 	return nil
+}
+
+// ReconcileValidationSuccess corrects a false negative after a fresh target
+// observation proves that every required resource is healthy. Failed attempts
+// remain in the event timeline as low-level execution evidence.
+func (r *MigrationRepository) ReconcileValidationSuccess(ctx context.Context, runID uuid.UUID, checkedAt time.Time) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin validation reconciliation: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var status domainmigration.RunStatus
+	var planID uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT status,migration_plan_id FROM migration_runs WHERE id=$1 FOR UPDATE`, runID).Scan(&status, &planID); errors.Is(err, pgx.ErrNoRows) {
+		return repository.ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("lock migration run for validation reconciliation: %w", err)
+	}
+	if status == domainmigration.RunCompleted {
+		return nil
+	}
+	if status != domainmigration.RunFailed {
+		return repository.ErrConflict
+	}
+	command, err := tx.Exec(ctx, `UPDATE migration_steps SET status='SUCCEEDED',progress=100,
+		summary='目标应用和必需资源复检全部通过',updated_at=now()
+		WHERE migration_run_id=$1 AND type='VALIDATION' AND status='FAILED'`, runID)
+	if err != nil {
+		return fmt.Errorf("reconcile validation step: %w", err)
+	}
+	if command.RowsAffected() == 0 {
+		return repository.ErrConflict
+	}
+	if _, err := tx.Exec(ctx, `UPDATE migration_runs SET status='COMPLETED',progress=100,completed_at=$2,
+		error_code='VALIDATION_RECONCILED',error_message='',updated_at=now() WHERE id=$1`, runID, checkedAt); err != nil {
+		return fmt.Errorf("complete reconciled migration run: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE migration_plans SET status='COMPLETED',updated_at=now() WHERE id=$1`, planID); err != nil {
+		return fmt.Errorf("complete reconciled migration plan: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO migration_events (migration_run_id,type,severity,message,detail)
+		VALUES ($1,'VALIDATION_RECONCILED','INFO','目标应用和必需资源复检全部通过',
+		jsonb_build_object('checkedAt',$2::timestamptz))`, runID, checkedAt); err != nil {
+		return fmt.Errorf("record validation reconciliation: %w", err)
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *MigrationRepository) SaveTopologyEvidence(ctx context.Context, value domainmigration.TopologyEvidence, terminal bool) error {

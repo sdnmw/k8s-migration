@@ -19,7 +19,7 @@ export default function OverviewPage({ preview = false }: { preview?: boolean })
   const awaiting = runValues.filter((value) => value.status === 'AWAITING_CUTOVER').length
   const summaries = [
     { label: '迁移任务', value: runValues.length, hint: '全部执行记录' },
-    { label: '迁移成功', value: runValues.filter((value) => value.status === 'COMPLETED').length, hint: '已确认切流' },
+    { label: '迁移成功', value: runValues.filter((value) => value.status === 'COMPLETED').length, hint: '目标验证已通过' },
     { label: '迁移中', value: runValues.filter((value) => isActiveStatus(value.status)).length, hint: `其中 ${awaiting} 个等待人工切流` },
     { label: '需要处理', value: failed, hint: failed ? '失败或已取消任务' : '当前没有异常任务' },
   ]

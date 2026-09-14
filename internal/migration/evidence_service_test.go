@@ -36,6 +36,37 @@ func TestDiagnosisTerminalFailureOverridesHistoricalScheduledRetry(t *testing.T)
 	}
 }
 
+func TestDiagnosisUsesValidationAsSuccessfulStepAfterReconciliation(t *testing.T) {
+	result := diagnoseRun(domainmigration.Run{Status: domainmigration.RunCompleted, ErrorCode: "VALIDATION_RECONCILED"},
+		[]domainmigration.Step{
+			{Status: domainmigration.StepSucceeded, Type: domainmigration.StepValidation},
+			{Status: domainmigration.StepSucceeded, Type: domainmigration.StepRollback},
+		}, nil, nil, time.Now())
+	if result.State != "SUCCEEDED" || result.Title != "迁移成功" || result.LastSuccessfulStep != string(domainmigration.StepValidation) {
+		t.Fatalf("unexpected reconciled diagnosis: %+v", result)
+	}
+}
+
+func TestValidationFailureCanBeReconciledWhenEveryRequiredResourceIsHealthy(t *testing.T) {
+	run := domainmigration.Run{Status: domainmigration.RunFailed}
+	steps := []domainmigration.Step{
+		{Type: domainmigration.StepValidation, Status: domainmigration.StepFailed},
+		{Type: domainmigration.StepRollback, Status: domainmigration.StepSucceeded},
+	}
+	graph := domainmigration.TopologyGraph{Nodes: []domainmigration.TopologyNode{
+		{Kind: "Deployment", Name: "frontend", Required: true, Status: domainmigration.ResourceSucceeded},
+		{Kind: "Service", Name: "frontend", Required: true, Status: domainmigration.ResourceSucceeded},
+		{Kind: "ConfigMap", Name: "kube-root-ca.crt", Required: false, Status: domainmigration.ResourceSkipped},
+	}}
+	if !validationFailureCanBeReconciled(run, steps, graph) {
+		t.Fatal("healthy current observation should reconcile a validation-only false negative")
+	}
+	graph.Nodes[0].Status = domainmigration.ResourceFailed
+	if validationFailureCanBeReconciled(run, steps, graph) {
+		t.Fatal("failed required resource must not reconcile the run")
+	}
+}
+
 func TestComposeTopologyShowsServicesVolumesNetworksAndGeneratedResources(t *testing.T) {
 	application := domainapplication.SourceApplication{SourceType: domainapplication.SourceCompose, Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{
 		ProjectName: "nacos-demo",

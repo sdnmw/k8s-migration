@@ -21,6 +21,10 @@ type InventoryDiscoverer interface {
 	DiscoverNamespace(context.Context, []byte, string) (domainapplication.Inventory, error)
 }
 
+type validationResultReconciler interface {
+	ReconcileValidationSuccess(context.Context, uuid.UUID, time.Time) error
+}
+
 type EvidenceService struct {
 	plans        repository.MigrationPlanRepository
 	runs         repository.MigrationRunRepository
@@ -55,6 +59,15 @@ func (s *EvidenceService) Topology(ctx context.Context, runID uuid.UUID) (domain
 		return domainmigration.TopologyEvidence{}, err
 	}
 	if found && terminal {
+		if stored.CurrentObservation != nil && stored.CurrentObservation.Error == "" {
+			run, runErr := s.runs.GetRun(ctx, runID)
+			if runErr != nil {
+				return domainmigration.TopologyEvidence{}, runErr
+			}
+			if _, reconcileErr := s.reconcileValidationResult(ctx, run, stored.CurrentObservation.Graph, stored.CurrentObservation.CheckedAt); reconcileErr != nil {
+				return domainmigration.TopologyEvidence{}, reconcileErr
+			}
+		}
 		return stored, nil
 	}
 	run, plan, application, profile, source, target, err := s.resolve(ctx, runID)
@@ -172,8 +185,61 @@ func (s *EvidenceService) RefreshTopology(ctx context.Context, runID uuid.UUID) 
 	if err := s.evidence.SaveCurrentTopologyObservation(ctx, runID, observation); err != nil {
 		return domainmigration.TopologyEvidence{}, err
 	}
+	if observeErr == nil {
+		if _, err := s.reconcileValidationResult(ctx, run, observation.Graph, observation.CheckedAt); err != nil {
+			return domainmigration.TopologyEvidence{}, err
+		}
+	}
 	value.CurrentObservation = &observation
 	return value, nil
+}
+
+func (s *EvidenceService) reconcileValidationResult(ctx context.Context, run domainmigration.Run, graph domainmigration.TopologyGraph, checkedAt time.Time) (bool, error) {
+	steps, err := s.runs.ListSteps(ctx, run.ID)
+	if err != nil {
+		return false, err
+	}
+	if !validationFailureCanBeReconciled(run, steps, graph) {
+		return false, nil
+	}
+	reconciler, ok := s.runs.(validationResultReconciler)
+	if !ok {
+		return false, errors.New("migration run repository cannot reconcile validation results")
+	}
+	if err := reconciler.ReconcileValidationSuccess(ctx, run.ID, checkedAt); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func validationFailureCanBeReconciled(run domainmigration.Run, steps []domainmigration.Step, graph domainmigration.TopologyGraph) bool {
+	if run.Status != domainmigration.RunFailed {
+		return false
+	}
+	failedValidation := false
+	for _, step := range steps {
+		if step.Status != domainmigration.StepFailed {
+			continue
+		}
+		if step.Type != domainmigration.StepValidation {
+			return false
+		}
+		failedValidation = true
+	}
+	if !failedValidation {
+		return false
+	}
+	required := 0
+	for _, node := range graph.Nodes {
+		if !node.Required || node.Status == domainmigration.ResourceSkipped {
+			continue
+		}
+		required++
+		if node.Status != domainmigration.ResourceSucceeded {
+			return false
+		}
+	}
+	return required > 0
 }
 
 func (s *EvidenceService) Timeline(ctx context.Context, runID uuid.UUID) (domainmigration.StepTimeline, error) {
@@ -207,6 +273,9 @@ func (s *EvidenceService) Timeline(ctx context.Context, runID uuid.UUID) (domain
 	}
 	values := make([]domainmigration.TimelineStep, 0, len(steps))
 	for _, step := range steps {
+		if run.ErrorCode == "VALIDATION_RECONCILED" && step.Type == domainmigration.StepValidation {
+			step.Summary = "目标应用和必需资源复检全部通过"
+		}
 		stepAttempts := byStepAttempts[step.ID]
 		if len(stepAttempts) == 0 && step.StartedAt != nil {
 			status := domainmigration.AttemptRunning
@@ -732,7 +801,12 @@ func diagnoseRun(run domainmigration.Run, steps []domainmigration.Step, events [
 		}
 	}
 	if run.Status == domainmigration.RunCompleted {
-		result.State, result.Title, result.Reason = "SUCCEEDED", "迁移已完成", "全部步骤完成并已确认人工切流。"
+		if run.ErrorCode == "VALIDATION_RECONCILED" {
+			result.State, result.Title, result.Reason = "SUCCEEDED", "迁移成功", "目标资源复检全部通过。"
+			result.LastSuccessfulStep = string(domainmigration.StepValidation)
+		} else {
+			result.State, result.Title, result.Reason = "SUCCEEDED", "迁移成功", "目标应用和必需资源已通过验证。"
+		}
 	}
 	if run.Status == domainmigration.RunAwaitingCutover {
 		result.State, result.Title, result.Reason = "WAITING", "等待人工切流", "目标验证已通过，等待管理员确认外部流量切换。"
