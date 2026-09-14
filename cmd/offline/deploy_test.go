@@ -104,6 +104,10 @@ func TestDeploymentValuesUseRetargetedHarborImages(t *testing.T) {
 	if global["storageClass"] != "smtx-block" {
 		t.Fatalf("unexpected global values: %+v", global)
 	}
+	policy := values["networkPolicy"].(map[string]any)
+	if enabled, ok := policy["enabled"].(bool); !ok || enabled {
+		t.Fatalf("one-time installer must leave NetworkPolicy disabled by default: %+v", policy)
+	}
 }
 
 func TestGeneratedDefaultMinIOTLSCoversEverySKSNode(t *testing.T) {

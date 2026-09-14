@@ -60,7 +60,7 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /var/lib/postgresql/data}
           readinessProbe: {exec: {command: [pg_isready, -U, {{ .Values.postgres.username | quote }}, -d, {{ .Values.postgres.database | quote }}]}, periodSeconds: 10}
-          livenessProbe: {tcpSocket: {port: postgres}, periodSeconds: 20}
+          livenessProbe: {exec: {command: [pg_isready, -U, {{ .Values.postgres.username | quote }}, -d, {{ .Values.postgres.database | quote }}]}, periodSeconds: 20}
           resources: {{ toYaml .Values.resources.postgres | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false

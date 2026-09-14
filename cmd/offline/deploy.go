@@ -215,15 +215,22 @@ func deployBundle(args []string, output io.Writer) error {
 		return err
 	}
 	defaultMinIORegistered := false
-	if defaultMinIO.Endpoint != "" && !platformAlreadyInstalled {
+	if defaultMinIO.Endpoint != "" {
 		applicationSecret, err := clientset.CoreV1().Secrets(options.namespace).Get(ctx, platformApplicationSecret, metav1.GetOptions{})
 		if err != nil || len(applicationSecret.Data["admin-password"]) == 0 {
 			return errors.New("read platform administrator password for default MinIO registration")
 		}
 		if err := registerDefaultObjectStorage(ctx, urls[0], string(applicationSecret.Data["admin-password"]), kubeconfig, defaultMinIO.Endpoint); err != nil {
-			return err
+			// An administrator may have changed the password after the first
+			// installation. Do not make a normal upgrade depend on the stale
+			// bootstrap value retained in the Kubernetes Secret. A fresh install
+			// must still fail closed so it cannot finish without object storage.
+			if !platformAlreadyInstalled {
+				return err
+			}
+		} else {
+			defaultMinIORegistered = true
 		}
-		defaultMinIORegistered = true
 	}
 	return encoder.Encode(map[string]any{"stage": "complete", "result": deploymentResult{
 		Release: state.Name, Revision: state.Revision, Namespace: options.namespace, StorageClass: options.storageClass,
@@ -478,7 +485,7 @@ func deploymentValues(lock offline.ImageLock, registry, project, storageClass st
 		},
 		"service":       map[string]any{"type": "NodePort", "port": 80},
 		"config":        map[string]any{"cookieSecure": cookieSecure},
-		"networkPolicy": map[string]any{"enabled": true},
+		"networkPolicy": map[string]any{"enabled": false},
 	}, nil
 }
 

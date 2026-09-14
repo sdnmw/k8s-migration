@@ -98,7 +98,9 @@ resources:
     limits: {cpu: "1", memory: 1Gi}
 
 networkPolicy:
-  enabled: true
+  # This is a short-lived migration appliance and must run consistently on
+  # SKS clusters whose CNI also enforces policy for kubelet health probes.
+  enabled: false
 
 monitoring:
   serviceMonitor:
