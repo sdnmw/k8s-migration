@@ -740,6 +740,16 @@ func diagnoseRun(run domainmigration.Run, steps []domainmigration.Step, events [
 	if run.Status == domainmigration.RunCancelled {
 		result.State, result.Title, result.Reason = "CANCELLED", "迁移已取消", firstNonEmpty(run.ErrorMessage, "源业务未停止或已经恢复。")
 	}
+	// A scheduled retry is historical evidence once the run reaches a terminal
+	// failure. Do not let an earlier RETRY_SCHEDULED attempt make a failed run
+	// look as if the worker will execute it again.
+	if run.Status == domainmigration.RunFailed {
+		result.State, result.Title = "FAILED", "迁移执行已失败"
+		result.Reason = firstNonEmpty(run.ErrorMessage, result.Reason, "迁移步骤执行失败，请查看最后一次尝试和关键事件。")
+		if result.Remediation == "" {
+			result.Remediation = "检查失败步骤的资源状态；修复后可编辑任务或重新执行。目标资源当前状态请以资源拓扑的最近检查结果为准。"
+		}
+	}
 	return result
 }
 

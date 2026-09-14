@@ -20,6 +20,22 @@ func TestDiagnosisDoesNotEquateFreshHeartbeatWithProgress(t *testing.T) {
 	}
 }
 
+func TestDiagnosisTerminalFailureOverridesHistoricalScheduledRetry(t *testing.T) {
+	now := time.Now()
+	result := diagnoseRun(domainmigration.Run{Status: domainmigration.RunFailed, ErrorMessage: "Deployment guestbook/frontend is not ready"},
+		[]domainmigration.Step{{Status: domainmigration.StepFailed, Type: domainmigration.StepValidation}}, nil,
+		[]domainmigration.StepAttempt{
+			{Status: domainmigration.AttemptRetryScheduled, ErrorMessage: "等待重试"},
+			{Status: domainmigration.AttemptFailed, ErrorMessage: "Deployment guestbook/frontend is not ready"},
+		}, now)
+	if result.State != "FAILED" || result.Title != "迁移执行已失败" {
+		t.Fatalf("terminal failure was overwritten by retry evidence: %+v", result)
+	}
+	if result.Reason != "Deployment guestbook/frontend is not ready" {
+		t.Fatalf("unexpected terminal failure reason: %+v", result)
+	}
+}
+
 func TestComposeTopologyShowsServicesVolumesNetworksAndGeneratedResources(t *testing.T) {
 	application := domainapplication.SourceApplication{SourceType: domainapplication.SourceCompose, Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{
 		ProjectName: "nacos-demo",
