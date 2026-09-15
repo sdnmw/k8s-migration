@@ -78,6 +78,58 @@ type KopiaSnapshot struct {
 	Files     int64
 }
 
+// RegistryCredential is used only for a short-lived Docker CLI config on the
+// Compose host. It is never written into the source application's files.
+type RegistryCredential struct {
+	Username string
+	Password string
+}
+
+type ComposeImagePublishSpec struct {
+	RunID       string
+	ProjectName string
+	Services    []string
+	Repository  string
+	Registry    RegistryCredential
+}
+
+func RegistryCredentialFromDockerConfig(contents []byte, repository string) (RegistryCredential, error) {
+	var config struct {
+		Auths map[string]struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Auth     string `json:"auth"`
+		} `json:"auths"`
+	}
+	if err := json.Unmarshal(contents, &config); err != nil {
+		return RegistryCredential{}, errors.New("registry Docker config is invalid")
+	}
+	host := strings.SplitN(strings.TrimSpace(repository), "/", 2)[0]
+	entry, ok := config.Auths[host]
+	if !ok {
+		entry, ok = config.Auths["https://"+host]
+	}
+	if !ok {
+		return RegistryCredential{}, fmt.Errorf("registry Docker config has no credential for %s", host)
+	}
+	if (entry.Username == "" || entry.Password == "") && entry.Auth != "" {
+		decoded, err := base64.StdEncoding.DecodeString(entry.Auth)
+		if err == nil {
+			parts := strings.SplitN(string(decoded), ":", 2)
+			if len(parts) == 2 {
+				entry.Username, entry.Password = parts[0], parts[1]
+			}
+			for index := range decoded {
+				decoded[index] = 0
+			}
+		}
+	}
+	if strings.TrimSpace(entry.Username) == "" || entry.Password == "" {
+		return RegistryCredential{}, errors.New("registry Docker config credential is incomplete")
+	}
+	return RegistryCredential{Username: entry.Username, Password: entry.Password}, nil
+}
+
 // InspectBindFiles only tests filesystem type; it never reads file contents.
 func (c *Client) InspectBindFiles(ctx context.Context, endpoint string, credential Credential, paths []string) (map[string]bool, error) {
 	command := "set -eu; "
@@ -200,6 +252,21 @@ func (c *Client) CreateKopiaSnapshot(ctx context.Context, endpoint string, crede
 	return parseKopiaSnapshot(output)
 }
 
+// PublishComposeImages resolves the immutable image behind each existing
+// Compose container, tags it in the configured migration repository and pushes
+// it without changing the source Compose definition. A stopped container is
+// sufficient; the source application does not need to be restarted.
+func (c *Client) PublishComposeImages(ctx context.Context, endpoint string, credential Credential, spec ComposeImagePublishSpec) (map[string]string, error) {
+	command, images, err := composeImagePublishCommand(spec)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.runControlled(ctx, endpoint, credential, command); err != nil {
+		return nil, err
+	}
+	return images, nil
+}
+
 func (c *Client) runControlled(ctx context.Context, endpoint string, credential Credential, command string) (string, error) {
 	prepared, err := c.Prepare(endpoint, credential)
 	if err != nil {
@@ -234,6 +301,49 @@ func composeActionCommand(spec ComposeActionSpec) (string, error) {
 		"printf %s " + shellQuote(compose) + " | base64 -d >\"$d/compose.yaml\"; " +
 		"printf %s " + shellQuote(environment) + " | base64 -d >\"$d/.env\"; " +
 		"docker compose --project-name " + shellQuote(spec.ProjectName) + " --env-file \"$d/.env\" -f \"$d/compose.yaml\" " + action, nil
+}
+
+var safeRegistryRepository = regexp.MustCompile(`^[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+$`)
+
+func composeImagePublishCommand(spec ComposeImagePublishSpec) (string, map[string]string, error) {
+	if !safeDockerName.MatchString(spec.RunID) || !safeDockerName.MatchString(spec.ProjectName) {
+		return "", nil, errors.New("Compose image publish run and project names are invalid")
+	}
+	repository := strings.TrimSuffix(strings.TrimSpace(spec.Repository), "/")
+	if !safeRegistryRepository.MatchString(repository) {
+		return "", nil, errors.New("Compose migration image repository is invalid")
+	}
+	registryHost := strings.SplitN(repository, "/", 2)[0]
+	if strings.TrimSpace(spec.Registry.Username) == "" || spec.Registry.Password == "" {
+		return "", nil, errors.New("Compose migration registry credential is incomplete")
+	}
+	services := append([]string(nil), spec.Services...)
+	sort.Strings(services)
+	images := make(map[string]string, len(services))
+	commands := []string{
+		"set -eu",
+		"d=$(mktemp -d)",
+		"trap 'rm -rf -- \"$d\"' EXIT HUP INT TERM",
+		"printf %s " + shellQuote(base64.StdEncoding.EncodeToString([]byte(spec.Registry.Password))) + " | base64 -d | docker --config \"$d\" login --username " + shellQuote(spec.Registry.Username) + " --password-stdin " + shellQuote(registryHost) + " >/dev/null",
+	}
+	for index, service := range services {
+		if !safeDockerName.MatchString(service) {
+			return "", nil, errors.New("Compose image publish service name is invalid")
+		}
+		target := repository + "/" + strings.ToLower(spec.ProjectName) + "-" + strings.ToLower(service) + ":run-" + strings.ToLower(spec.RunID)
+		images[service] = target
+		containerVar := fmt.Sprintf("c_%d", index)
+		imageVar := fmt.Sprintf("i_%d", index)
+		commands = append(commands,
+			containerVar+"=$(docker ps -aq --filter label=com.docker.compose.project="+shellQuote(spec.ProjectName)+" --filter label=com.docker.compose.service="+shellQuote(service)+" | head -n 1)",
+			"test -n \"$"+containerVar+"\" || { printf %s "+shellQuote("Compose service "+service+" has no existing container image; start or build it on the source host first\\n")+" >&2; exit 1; }",
+			imageVar+"=$(docker inspect --format '{{.Image}}' \"$"+containerVar+"\")",
+			"test -n \"$"+imageVar+"\"",
+			"docker tag \"$"+imageVar+"\" "+shellQuote(target),
+			"docker --config \"$d\" push "+shellQuote(target)+" >/dev/null",
+		)
+	}
+	return strings.Join(commands, "; "), images, nil
 }
 
 func kopiaSnapshotCommand(spec KopiaSnapshotSpec) (string, error) {

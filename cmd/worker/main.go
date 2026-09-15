@@ -71,6 +71,7 @@ func main() {
 	mappingRepository := postgresrepository.NewMappingRepository(pool)
 	platformRepository := postgresrepository.NewPlatformRepository(pool)
 	kubernetesClient := kubernetesadapter.NewClient(30 * time.Second)
+	sshClient := sshadapter.NewClient(30 * time.Second)
 	veleroExecutor, err := migrationservice.NewVeleroExecutor(
 		migrationRepository, migrationRepository, migrationRepository,
 		environmentRepository, applicationRepository, mappingRepository,
@@ -81,11 +82,34 @@ func main() {
 		logger.Error("migration executor initialization failed", "error", err)
 		os.Exit(1)
 	}
+	composeOptions := []migrationservice.ComposeExecutorOption{
+		migrationservice.WithComposeDataMovement(platformRepository, sshClient, cfg.KopiaImage),
+	}
+	if cfg.ComposeImageRepository != "" || cfg.RegistryDockerConfigFile != "" {
+		if cfg.ComposeImageRepository == "" || cfg.RegistryDockerConfigFile == "" {
+			logger.Error("Compose build-image publishing requires both repository and Docker config file")
+			os.Exit(1)
+		}
+		dockerConfig, readErr := os.ReadFile(cfg.RegistryDockerConfigFile)
+		if readErr != nil {
+			logger.Error("read registry Docker config for Compose image publishing", "error", readErr)
+			os.Exit(1)
+		}
+		registryCredential, credentialErr := sshadapter.RegistryCredentialFromDockerConfig(dockerConfig, cfg.ComposeImageRepository)
+		if credentialErr != nil {
+			logger.Error("load registry credential for Compose image publishing", "error", credentialErr)
+			os.Exit(1)
+		}
+		composeOptions = append(composeOptions, migrationservice.WithComposeBuildImagePublishing(sshClient, cfg.ComposeImageRepository, registryCredential, dockerConfig, cfg.RegistryPullSecretName))
+		for index := range dockerConfig {
+			dockerConfig[index] = 0
+		}
+	}
 	composeExecutor, err := migrationservice.NewComposeExecutor(
 		migrationRepository, migrationRepository, migrationRepository,
 		environmentRepository, applicationRepository, mappingRepository,
 		credentialVault, kubernetesClient, transform.NewEngine(), cfg.KomposeImage, cfg.StagingHelperImage,
-		migrationservice.WithComposeDataMovement(platformRepository, sshadapter.NewClient(30*time.Second), cfg.KopiaImage),
+		composeOptions...,
 	)
 	if err != nil {
 		logger.Error("Compose migration executor initialization failed", "error", err)

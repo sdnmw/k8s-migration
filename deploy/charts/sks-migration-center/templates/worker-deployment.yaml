@@ -43,6 +43,9 @@ spec:
             - {name: CREDENTIAL_MASTER_KEY_FILE, value: /run/secrets/sks-migration/master-key}
           volumeMounts:
             - {name: application-secrets, mountPath: /run/secrets/sks-migration, readOnly: true}
+            {{- if .Values.global.composeImageRepository }}
+            - {name: registry-credentials, mountPath: /run/secrets/sks-migration-registry, readOnly: true}
+            {{- end }}
           resources: {{ toYaml .Values.resources.worker | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
@@ -54,3 +57,10 @@ spec:
             secretName: {{ .Values.secrets.existingSecret }}
             items:
               - {key: {{ .Values.secrets.masterKeyKey }}, path: master-key}
+        {{- if .Values.global.composeImageRepository }}
+        - name: registry-credentials
+          secret:
+            secretName: {{ .Values.global.registryPullSecretName }}
+            items:
+              - {key: .dockerconfigjson, path: .dockerconfigjson}
+        {{- end }}

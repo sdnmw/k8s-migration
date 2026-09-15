@@ -231,7 +231,7 @@ func inventory(project *composetypes.Project) application.ComposeInventory {
 			}
 		}
 		if service.Build != nil {
-			result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_BUILD_UNSUPPORTED", Service: name, Message: "系统不构建业务镜像，请提供可拉取的镜像"})
+			result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_BUILD_IMAGE_PUBLISH_REQUIRED", Service: name, Message: "迁移时将复用源主机已有的本地镜像并发布到迁移 Harbor；源服务需至少成功创建过一次容器"})
 		}
 		if service.Privileged {
 			result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_PRIVILEGED", Service: name, Message: "特权容器需要安全评估"})

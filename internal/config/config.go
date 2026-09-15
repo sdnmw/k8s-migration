@@ -54,20 +54,23 @@ type VeleroImages struct {
 }
 
 type Worker struct {
-	Environment             string
-	Version                 string
-	LogLevel                slog.Level
-	HeartbeatInterval       time.Duration
-	PollInterval            time.Duration
-	LeaseDuration           time.Duration
-	RetryDelay              time.Duration
-	Database                Database
-	CredentialMasterKeyFile string
-	CredentialKeyVersion    int
-	StagingHelperImage      string
-	KomposeImage            string
-	KopiaImage              string
-	MetricsAddr             string
+	Environment              string
+	Version                  string
+	LogLevel                 slog.Level
+	HeartbeatInterval        time.Duration
+	PollInterval             time.Duration
+	LeaseDuration            time.Duration
+	RetryDelay               time.Duration
+	Database                 Database
+	CredentialMasterKeyFile  string
+	CredentialKeyVersion     int
+	StagingHelperImage       string
+	KomposeImage             string
+	KopiaImage               string
+	MetricsAddr              string
+	ComposeImageRepository   string
+	RegistryDockerConfigFile string
+	RegistryPullSecretName   string
 }
 
 type Database struct {
@@ -196,20 +199,23 @@ func LoadWorker() (Worker, error) {
 	}
 
 	return Worker{
-		Environment:             stringEnv("APP_ENV", defaultEnvironment),
-		Version:                 stringEnv("APP_VERSION", defaultVersion),
-		LogLevel:                level,
-		HeartbeatInterval:       heartbeat,
-		PollInterval:            poll,
-		LeaseDuration:           lease,
-		RetryDelay:              retry,
-		Database:                databaseConfig(),
-		CredentialMasterKeyFile: stringEnv("CREDENTIAL_MASTER_KEY_FILE", "/run/secrets/sks-migration/master-key"),
-		CredentialKeyVersion:    keyVersion,
-		StagingHelperImage:      stagingHelperImage,
-		KomposeImage:            komposeImage,
-		KopiaImage:              kopiaImage,
-		MetricsAddr:             stringEnv("WORKER_METRICS_ADDR", ":9090"),
+		Environment:              stringEnv("APP_ENV", defaultEnvironment),
+		Version:                  stringEnv("APP_VERSION", defaultVersion),
+		LogLevel:                 level,
+		HeartbeatInterval:        heartbeat,
+		PollInterval:             poll,
+		LeaseDuration:            lease,
+		RetryDelay:               retry,
+		Database:                 databaseConfig(),
+		CredentialMasterKeyFile:  stringEnv("CREDENTIAL_MASTER_KEY_FILE", "/run/secrets/sks-migration/master-key"),
+		CredentialKeyVersion:     keyVersion,
+		StagingHelperImage:       stagingHelperImage,
+		KomposeImage:             komposeImage,
+		KopiaImage:               kopiaImage,
+		MetricsAddr:              stringEnv("WORKER_METRICS_ADDR", ":9090"),
+		ComposeImageRepository:   stringEnv("COMPOSE_IMAGE_REPOSITORY", ""),
+		RegistryDockerConfigFile: stringEnv("REGISTRY_DOCKER_CONFIG_FILE", ""),
+		RegistryPullSecretName:   stringEnv("REGISTRY_PULL_SECRET_NAME", "sks-migration-registry"),
 	}, nil
 }
 

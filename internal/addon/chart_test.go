@@ -20,7 +20,13 @@ func TestBaseChartRendersOnlyDigestPinnedImages(t *testing.T) {
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
 	values := map[string]any{
-		"global": map[string]any{"storageClass": "smtx-block", "imagePullSecrets": []any{}},
+		"global": map[string]any{
+			"storageClass":           "smtx-block",
+			"imagePullSecrets":       []any{},
+			"composeImageRepository": "harbor.local/migration/compose",
+			"registryPullSecretName": "migration-registry",
+		},
+		"networkPolicy": map[string]any{"enabled": true},
 		"image": map[string]any{
 			"api":      map[string]any{"repository": "harbor.local/migration/api", "digest": digest},
 			"worker":   map[string]any{"repository": "harbor.local/migration/worker", "digest": digest},
@@ -78,6 +84,10 @@ func TestBaseChartRendersOnlyDigestPinnedImages(t *testing.T) {
 		"STAGING_HELPER_IMAGE: \"harbor.local/migration/nfs-probe-helper@" + digest + "\"",
 		"KOMPOSE_IMAGE: \"harbor.local/migration/kompose@" + digest + "\"",
 		"KOPIA_IMAGE: \"harbor.local/migration/kopia@" + digest + "\"",
+		"COMPOSE_IMAGE_REPOSITORY: \"harbor.local/migration/compose\"",
+		"REGISTRY_DOCKER_CONFIG_FILE: \"/run/secrets/sks-migration-registry/.dockerconfigjson\"",
+		"secretName: migration-registry",
+		"name: registry-credentials",
 		"name: CREDENTIAL_MASTER_KEY_FILE",
 		"mountPath: /run/secrets/sks-migration",
 	} {

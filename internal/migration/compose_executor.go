@@ -37,11 +37,17 @@ type ComposeKubernetesClient interface {
 	ScaleWorkloads(context.Context, []byte, []kubernetesadapter.ScalableWorkload) error
 	ValidateNamespace(context.Context, []byte, string) (kubernetesadapter.NamespaceValidation, error)
 	ValidateEndpoints(context.Context, []byte, kubernetesadapter.EndpointValidationSpec) error
+	EnsureMigrationNamespace(context.Context, []byte, string) error
+	PutDockerConfigSecret(context.Context, []byte, string, string, []byte) error
 }
 
 type ComposeSourceMover interface {
 	RunComposeAction(context.Context, string, sshadapter.Credential, sshadapter.ComposeActionSpec) error
 	CreateKopiaSnapshot(context.Context, string, sshadapter.Credential, sshadapter.KopiaSnapshotSpec) (sshadapter.KopiaSnapshot, error)
+}
+
+type ComposeImagePublisher interface {
+	PublishComposeImages(context.Context, string, sshadapter.Credential, sshadapter.ComposeImagePublishSpec) (map[string]string, error)
 }
 
 type ComposeTransformEngine interface {
@@ -50,20 +56,25 @@ type ComposeTransformEngine interface {
 }
 
 type ComposeExecutor struct {
-	plans        repository.MigrationPlanRepository
-	runs         repository.MigrationRunRepository
-	progress     repository.MigrationProgressRepository
-	environments repository.EnvironmentRepository
-	applications repository.ApplicationRepository
-	mappings     repository.MappingRepository
-	vault        ExecutionVault
-	kubernetes   ComposeKubernetesClient
-	transform    ComposeTransformEngine
-	komposeImage string
-	helperImage  string
-	kopiaImage   string
-	platform     repository.PlatformRepository
-	sourceMover  ComposeSourceMover
+	plans                  repository.MigrationPlanRepository
+	runs                   repository.MigrationRunRepository
+	progress               repository.MigrationProgressRepository
+	environments           repository.EnvironmentRepository
+	applications           repository.ApplicationRepository
+	mappings               repository.MappingRepository
+	vault                  ExecutionVault
+	kubernetes             ComposeKubernetesClient
+	transform              ComposeTransformEngine
+	komposeImage           string
+	helperImage            string
+	kopiaImage             string
+	platform               repository.PlatformRepository
+	sourceMover            ComposeSourceMover
+	imagePublisher         ComposeImagePublisher
+	imageRepository        string
+	registryCredential     sshadapter.RegistryCredential
+	registryDockerConfig   []byte
+	registryPullSecretName string
 }
 
 type ComposeExecutorOption func(*ComposeExecutor) error
@@ -74,6 +85,21 @@ func WithComposeDataMovement(platformRepository repository.PlatformRepository, s
 			return errors.New("Compose Kopia dependencies and digest-pinned image are required")
 		}
 		executor.platform, executor.sourceMover, executor.kopiaImage = platformRepository, sourceMover, kopiaImage
+		return nil
+	}
+}
+
+func WithComposeBuildImagePublishing(publisher ComposeImagePublisher, repository string, credential sshadapter.RegistryCredential, dockerConfig []byte, pullSecretName string) ComposeExecutorOption {
+	configCopy := append([]byte(nil), dockerConfig...)
+	return func(executor *ComposeExecutor) error {
+		if publisher == nil || strings.TrimSpace(repository) == "" || strings.TrimSpace(credential.Username) == "" || credential.Password == "" || len(configCopy) == 0 || strings.TrimSpace(pullSecretName) == "" {
+			return errors.New("Compose build-image publishing configuration is incomplete")
+		}
+		executor.imagePublisher = publisher
+		executor.imageRepository = strings.TrimSuffix(strings.TrimSpace(repository), "/")
+		executor.registryCredential = credential
+		executor.registryDockerConfig = append([]byte(nil), configCopy...)
+		executor.registryPullSecretName = strings.TrimSpace(pullSecretName)
 		return nil
 	}
 }
@@ -123,15 +149,16 @@ func (e *ComposeExecutor) Handle(ctx context.Context, lease domainmigration.Leas
 }
 
 type composeExecutionContext struct {
-	run         domainmigration.Run
-	plan        domainmigration.Plan
-	application domainapplication.SourceApplication
-	source      domainenvironment.Environment
-	target      domainenvironment.Environment
-	mapping     domainmapping.Profile
-	definition  domainapplication.ComposeDefinition
-	targetKube  []byte
-	namespace   string
+	run             domainmigration.Run
+	plan            domainmigration.Plan
+	application     domainapplication.SourceApplication
+	source          domainenvironment.Environment
+	target          domainenvironment.Environment
+	mapping         domainmapping.Profile
+	definition      domainapplication.ComposeDefinition
+	targetKube      []byte
+	namespace       string
+	publishedImages map[string]string
 }
 
 func (e *ComposeExecutor) resolve(ctx context.Context, runID uuid.UUID) (composeExecutionContext, error) {
@@ -191,7 +218,14 @@ func (e *ComposeExecutor) resolve(ctx context.Context, runID uuid.UUID) (compose
 		return composeExecutionContext{}, err
 	}
 	namespace := composeTargetNamespace(value.Name, mapping.Namespaces)
-	return composeExecutionContext{run: run, plan: plan, application: value, source: source, target: target, mapping: mapping, definition: definition, targetKube: targetKube, namespace: namespace}, nil
+	publishedImages, err := e.publishedComposeImages(ctx, runID)
+	if err != nil {
+		wipeBytes(definition.ComposeYAML)
+		wipeBytes(definition.EnvironmentFile)
+		wipeBytes(targetKube)
+		return composeExecutionContext{}, err
+	}
+	return composeExecutionContext{run: run, plan: plan, application: value, source: source, target: target, mapping: mapping, definition: definition, targetKube: targetKube, namespace: namespace, publishedImages: publishedImages}, nil
 }
 
 func (r *composeExecutionContext) clear() {
@@ -206,16 +240,37 @@ func (e *ComposeExecutor) preflight(ctx context.Context, runID uuid.UUID) error 
 		return err
 	}
 	defer resolved.clear()
+	missing := make([]string, 0)
 	for _, service := range resolved.application.Inventory.Compose.Services {
-		if strings.TrimSpace(service.Image) == "" {
-			return fmt.Errorf("Compose service %s has no pullable image", service.Name)
+		if strings.TrimSpace(service.Image) == "" && strings.TrimSpace(resolved.publishedImages[service.Name]) == "" {
+			missing = append(missing, service.Name)
 		}
+	}
+	if len(missing) > 0 {
+		if e.imagePublisher == nil {
+			return fmt.Errorf("Compose services %s use local build images; configure the migration Harbor publisher or add pullable images", strings.Join(missing, ", "))
+		}
+		credential, err := e.resolveSSHCredential(ctx, resolved.source)
+		if err != nil {
+			return err
+		}
+		images, err := e.imagePublisher.PublishComposeImages(ctx, resolved.source.Endpoint, credential, sshadapter.ComposeImagePublishSpec{
+			RunID: runID.String(), ProjectName: resolved.application.Inventory.Compose.ProjectName,
+			Services: missing, Repository: e.imageRepository, Registry: e.registryCredential,
+		})
+		if err != nil {
+			return fmt.Errorf("publish local Compose images to migration Harbor: %w", err)
+		}
+		if err := e.progress.AppendEvent(ctx, domainmigration.Event{RunID: runID, Type: "COMPOSE_BUILD_IMAGES_PUBLISHED", Severity: domainmigration.EventInfo, Message: fmt.Sprintf("Published %d local Compose images to the migration Harbor", len(images)), Detail: map[string]any{"images": images, "services": missing}}); err != nil {
+			return err
+		}
+		resolved.publishedImages = images
 	}
 	result, err := e.convert(ctx, resolved)
 	if err != nil {
 		return err
 	}
-	transfers, err := composeTransfers(resolved.application.Inventory.Compose, result)
+	transfers, err := composeTransfersForExecution(resolved, result)
 	if err != nil {
 		return err
 	}
@@ -364,7 +419,16 @@ func (e *ComposeExecutor) restore(ctx context.Context, runID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
-	transfers, err := composeTransfers(resolved.application.Inventory.Compose, result)
+	if len(resolved.publishedImages) > 0 {
+		if err := e.kubernetes.EnsureMigrationNamespace(ctx, resolved.targetKube, resolved.namespace); err != nil {
+			return fmt.Errorf("prepare target namespace for private migration images: %w", err)
+		}
+		if err := e.kubernetes.PutDockerConfigSecret(ctx, resolved.targetKube, resolved.namespace, e.registryPullSecretName, e.registryDockerConfig); err != nil {
+			return err
+		}
+		ensureImagePullSecret(&result, e.registryPullSecretName)
+	}
+	transfers, err := composeTransfersForExecution(resolved, result)
 	if err != nil {
 		return err
 	}
@@ -508,9 +572,18 @@ func (e *ComposeExecutor) rollback(ctx context.Context, runID uuid.UUID) error {
 }
 
 func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecutionContext) (transform.Result, error) {
+	composeYAML := resolved.definition.ComposeYAML
+	if len(resolved.publishedImages) > 0 {
+		var err error
+		composeYAML, err = composeYAMLWithPublishedImages(composeYAML, resolved.publishedImages)
+		if err != nil {
+			return transform.Result{}, err
+		}
+		defer wipeBytes(composeYAML)
+	}
 	manifests, err := e.kubernetes.RunKomposeJob(ctx, resolved.targetKube, kubernetesadapter.KomposeJobSpec{
 		SystemNamespace: composeSystemNamespace, TargetNamespace: resolved.namespace, RunID: resolved.run.ID.String(),
-		ComposeYAML: resolved.definition.ComposeYAML, EnvironmentFile: resolved.definition.EnvironmentFile,
+		ComposeYAML: composeYAML, EnvironmentFile: resolved.definition.EnvironmentFile,
 		KomposeImage: e.komposeImage, HelperImage: e.helperImage,
 	})
 	if err != nil {
@@ -529,18 +602,19 @@ func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecution
 		inventory = &analyzed
 	}
 	inventory = composeInventoryWithRawExpose(inventory, resolved.definition.ComposeYAML)
+	inventory = composeInventoryForPublishedImages(inventory, resolved.definition.ComposeYAML, resolved.publishedImages)
 	ensureComposeInternalServices(&result, inventory, resolved.namespace)
-	if err := normalizeSharedComposeClaims(&result, resolved.application.Inventory.Compose); err != nil {
+	if err := normalizeSharedComposeClaims(&result, inventory); err != nil {
 		return result, err
 	}
 	inspector, ok := e.sourceMover.(interface {
 		InspectBindFiles(context.Context, string, sshadapter.Credential, []string) (map[string]bool, error)
 	})
-	if !ok || resolved.application.Inventory.Compose == nil {
+	if !ok || inventory == nil {
 		return result, nil
 	}
 	paths := []string{}
-	for _, svc := range resolved.application.Inventory.Compose.Services {
+	for _, svc := range inventory.Services {
 		for _, mount := range svc.Mounts {
 			if mount.Type == "bind" {
 				paths = append(paths, mount.Source)
@@ -558,7 +632,7 @@ func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecution
 	if err != nil {
 		return result, err
 	}
-	for _, svc := range resolved.application.Inventory.Compose.Services {
+	for _, svc := range inventory.Services {
 		for _, mount := range svc.Mounts {
 			if !files[mount.Source] {
 				continue
@@ -597,6 +671,201 @@ func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecution
 		}
 	}
 	return result, nil
+}
+
+func (e *ComposeExecutor) publishedComposeImages(ctx context.Context, runID uuid.UUID) (map[string]string, error) {
+	events, err := e.runs.ListEvents(ctx, runID, 0, 500)
+	if err != nil {
+		return nil, err
+	}
+	for index := len(events) - 1; index >= 0; index-- {
+		if events[index].Type != "COMPOSE_BUILD_IMAGES_PUBLISHED" {
+			continue
+		}
+		result := map[string]string{}
+		switch values := events[index].Detail["images"].(type) {
+		case map[string]string:
+			for key, value := range values {
+				result[key] = value
+			}
+		case map[string]any:
+			for key, raw := range values {
+				if value, ok := raw.(string); ok && value != "" {
+					result[key] = value
+				}
+			}
+		}
+		return result, nil
+	}
+	return map[string]string{}, nil
+}
+
+func composeYAMLWithPublishedImages(contents []byte, images map[string]string) ([]byte, error) {
+	var root map[string]any
+	if err := yaml.Unmarshal(contents, &root); err != nil {
+		return nil, errors.New("stored Compose definition cannot be updated with published images")
+	}
+	services, ok := root["services"].(map[string]any)
+	if !ok {
+		return nil, errors.New("stored Compose definition has no services")
+	}
+	for name, image := range images {
+		raw, found := services[name]
+		service, valid := raw.(map[string]any)
+		if !found || !valid || strings.TrimSpace(image) == "" {
+			return nil, fmt.Errorf("published image for Compose service %s cannot be applied", name)
+		}
+		buildContext := composeBuildContext(service["build"])
+		service["volumes"] = composeTargetVolumes(service["volumes"], buildContext)
+		service["image"] = image
+		delete(service, "build")
+	}
+	result, err := yaml.Marshal(root)
+	if err != nil {
+		return nil, errors.New("render Compose definition with published images")
+	}
+	return result, nil
+}
+
+func composeBuildContext(value any) string {
+	switch build := value.(type) {
+	case string:
+		return filepath.Clean(build)
+	case map[string]any:
+		context, _ := build["context"].(string)
+		if strings.TrimSpace(context) != "" {
+			return filepath.Clean(context)
+		}
+	}
+	return ""
+}
+
+func composeTargetVolumes(value any, buildContext string) []any {
+	volumes, _ := value.([]any)
+	result := make([]any, 0, len(volumes))
+	for _, raw := range volumes {
+		source, _, mountType := composeMountFields(raw)
+		if mountType == "volume" && source == "" {
+			continue
+		}
+		if mountType == "bind" && sameComposePath(source, buildContext) {
+			continue
+		}
+		result = append(result, raw)
+	}
+	return result
+}
+
+func composeMountFields(value any) (source, target, mountType string) {
+	switch mount := value.(type) {
+	case string:
+		parts := strings.Split(mount, ":")
+		if len(parts) == 1 {
+			return "", strings.TrimSpace(parts[0]), "volume"
+		}
+		source, target = strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if strings.HasPrefix(source, ".") || filepath.IsAbs(source) {
+			mountType = "bind"
+		} else {
+			mountType = "volume"
+		}
+		return source, target, mountType
+	case map[string]any:
+		source, _ = mount["source"].(string)
+		target, _ = mount["target"].(string)
+		mountType, _ = mount["type"].(string)
+		return strings.TrimSpace(source), strings.TrimSpace(target), strings.TrimSpace(mountType)
+	default:
+		return "", "", ""
+	}
+}
+
+func sameComposePath(source, buildContext string) bool {
+	if strings.TrimSpace(source) == "" || strings.TrimSpace(buildContext) == "" {
+		return false
+	}
+	return filepath.Clean(source) == filepath.Clean(buildContext)
+}
+
+func ignoredPublishedBuildMounts(contents []byte, images map[string]string) map[string]map[string]bool {
+	result := map[string]map[string]bool{}
+	if len(images) == 0 {
+		return result
+	}
+	var root map[string]any
+	if yaml.Unmarshal(contents, &root) != nil {
+		return result
+	}
+	services, _ := root["services"].(map[string]any)
+	for name := range images {
+		service, _ := services[name].(map[string]any)
+		buildContext := composeBuildContext(service["build"])
+		volumes, _ := service["volumes"].([]any)
+		for _, raw := range volumes {
+			source, target, mountType := composeMountFields(raw)
+			if target == "" {
+				continue
+			}
+			if (mountType == "volume" && source == "") || (mountType == "bind" && sameComposePath(source, buildContext)) {
+				if result[name] == nil {
+					result[name] = map[string]bool{}
+				}
+				result[name][target] = true
+			}
+		}
+	}
+	return result
+}
+
+func composeInventoryForPublishedImages(inventory *domainapplication.ComposeInventory, contents []byte, images map[string]string) *domainapplication.ComposeInventory {
+	if inventory == nil || len(images) == 0 {
+		return inventory
+	}
+	ignored := ignoredPublishedBuildMounts(contents, images)
+	copy := *inventory
+	copy.Services = append([]domainapplication.ComposeService(nil), inventory.Services...)
+	for index := range copy.Services {
+		service := &copy.Services[index]
+		service.Mounts = append([]domainapplication.ComposeMount(nil), service.Mounts...)
+		filtered := service.Mounts[:0]
+		for _, mount := range service.Mounts {
+			if ignored[service.Name][mount.Target] {
+				continue
+			}
+			filtered = append(filtered, mount)
+		}
+		service.Mounts = filtered
+	}
+	return &copy
+}
+
+func ensureImagePullSecret(result *transform.Result, name string) {
+	if result == nil || strings.TrimSpace(name) == "" {
+		return
+	}
+	for index := range result.Documents {
+		object := &result.Documents[index].Object
+		if object.GetKind() != "Deployment" && object.GetKind() != "StatefulSet" && object.GetKind() != "DaemonSet" && object.GetKind() != "Job" && object.GetKind() != "CronJob" {
+			continue
+		}
+		path := []string{"spec", "template", "spec", "imagePullSecrets"}
+		if object.GetKind() == "CronJob" {
+			path = []string{"spec", "jobTemplate", "spec", "template", "spec", "imagePullSecrets"}
+		}
+		values, _, _ := unstructured.NestedSlice(object.Object, path...)
+		found := false
+		for _, raw := range values {
+			item, _ := raw.(map[string]any)
+			if item["name"] == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			values = append(values, map[string]any{"name": name})
+			_ = unstructured.SetNestedSlice(object.Object, values, path...)
+		}
+	}
 }
 
 // composeInventoryWithRawExpose keeps internal-port discovery available even
@@ -804,7 +1073,12 @@ func (e *ComposeExecutor) resolveTransfers(ctx context.Context, resolved compose
 	if err != nil {
 		return nil, err
 	}
-	return composeTransfers(resolved.application.Inventory.Compose, result)
+	return composeTransfersForExecution(resolved, result)
+}
+
+func composeTransfersForExecution(resolved composeExecutionContext, result transform.Result) ([]composeTransfer, error) {
+	inventory := composeInventoryForPublishedImages(resolved.application.Inventory.Compose, resolved.definition.ComposeYAML, resolved.publishedImages)
+	return composeTransfers(inventory, result)
 }
 
 func composeTransfers(inventory *domainapplication.ComposeInventory, result transform.Result) ([]composeTransfer, error) {

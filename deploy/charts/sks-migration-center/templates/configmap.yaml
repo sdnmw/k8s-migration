@@ -27,3 +27,8 @@ data:
   STAGING_HELPER_IMAGE: {{ include "migration.image" .Values.addonImages.nfsProbe | quote }}
   KOMPOSE_IMAGE: {{ include "migration.image" .Values.addonImages.kompose | quote }}
   KOPIA_IMAGE: {{ include "migration.image" .Values.addonImages.kopia | quote }}
+  {{- if .Values.global.composeImageRepository }}
+  COMPOSE_IMAGE_REPOSITORY: {{ .Values.global.composeImageRepository | quote }}
+  REGISTRY_DOCKER_CONFIG_FILE: "/run/secrets/sks-migration-registry/.dockerconfigjson"
+  REGISTRY_PULL_SECRET_NAME: {{ .Values.global.registryPullSecretName | quote }}
+  {{- end }}

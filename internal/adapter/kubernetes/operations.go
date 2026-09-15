@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -130,6 +131,42 @@ func (c *Client) PutOpaqueSecret(ctx context.Context, kubeconfig []byte, namespa
 	}
 	if err != nil {
 		return fmt.Errorf("write managed Kubernetes Secret: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) PutDockerConfigSecret(ctx context.Context, kubeconfig []byte, namespace, name string, dockerConfigJSON []byte) error {
+	if namespace == "" || name == "" || len(dockerConfigJSON) == 0 {
+		return errors.New("registry secret namespace, name and Docker config are required")
+	}
+	var document map[string]any
+	if err := json.Unmarshal(dockerConfigJSON, &document); err != nil || len(document) == 0 {
+		return errors.New("registry Docker config is invalid")
+	}
+	clientset, err := c.clientset(kubeconfig)
+	if err != nil {
+		return err
+	}
+	secrets := clientset.CoreV1().Secrets(namespace)
+	data := map[string][]byte{corev1.DockerConfigJsonKey: append([]byte(nil), dockerConfigJSON...)}
+	existing, err := secrets.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		_, err = secrets.Create(ctx, &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Labels: map[string]string{"app.kubernetes.io/managed-by": "sks-migration-center"}},
+			Type:       corev1.SecretTypeDockerConfigJson, Data: data,
+		}, metav1.CreateOptions{})
+	} else if err == nil {
+		existing = existing.DeepCopy()
+		existing.Type = corev1.SecretTypeDockerConfigJson
+		existing.Data = data
+		if existing.Labels == nil {
+			existing.Labels = map[string]string{}
+		}
+		existing.Labels["app.kubernetes.io/managed-by"] = "sks-migration-center"
+		_, err = secrets.Update(ctx, existing, metav1.UpdateOptions{})
+	}
+	if err != nil {
+		return fmt.Errorf("write managed registry pull Secret: %w", err)
 	}
 	return nil
 }

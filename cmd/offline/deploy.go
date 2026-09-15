@@ -472,10 +472,14 @@ func deploymentValues(lock offline.ImageLock, registry, project, storageClass st
 		}
 		resolved[name] = entry
 	}
-	_ = project
 	return map[string]any{
-		"global": map[string]any{"storageClass": storageClass, "imagePullSecrets": []any{map[string]any{"name": platformRegistrySecret}}},
-		"image":  map[string]any{"api": resolved["platform-api"], "worker": resolved["platform-worker"], "web": resolved["platform-web"], "postgres": resolved["postgresql"], "pullPolicy": "IfNotPresent"},
+		"global": map[string]any{
+			"storageClass":           storageClass,
+			"imagePullSecrets":       []any{map[string]any{"name": platformRegistrySecret}},
+			"composeImageRepository": registry + "/" + project + "/compose-migrations",
+			"registryPullSecretName": platformRegistrySecret,
+		},
+		"image": map[string]any{"api": resolved["platform-api"], "worker": resolved["platform-worker"], "web": resolved["platform-web"], "postgres": resolved["postgresql"], "pullPolicy": "IfNotPresent"},
 		"addonImages": map[string]any{
 			"minio":  resolved["minio"],
 			"velero": resolved["velero"], "veleroAWSPlugin": resolved["velero-plugin-for-aws"],

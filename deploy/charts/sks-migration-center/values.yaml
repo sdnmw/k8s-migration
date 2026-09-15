@@ -1,6 +1,8 @@
 global:
   storageClass: ""
   imagePullSecrets: []
+  composeImageRepository: ""
+  registryPullSecretName: sks-migration-registry
 
 image:
   api:

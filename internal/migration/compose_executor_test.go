@@ -72,6 +72,115 @@ func TestComposeExecutorBlocksVolumesUntilKopiaPath(t *testing.T) {
 	}
 }
 
+func TestComposeExecutorPublishesBuildOnlyImagesWithoutChangingSourceDefinition(t *testing.T) {
+	runID, planID, appID, sourceID, targetID, mappingID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	definitionID, targetCredentialID, sourceCredentialID := uuid.New(), uuid.New(), uuid.New()
+	composeYAML := []byte("services:\n  backend:\n    build:\n      context: /srv/backend\n")
+	definition, _ := json.Marshal(domainapplication.ComposeDefinition{ComposeYAML: composeYAML})
+	sshCredential, _ := json.Marshal(map[string]string{"username": "migration", "privateKey": "key", "hostKeyFingerprint": "SHA256:test"})
+	application := domainapplication.SourceApplication{
+		ID: appID, EnvironmentID: sourceID, Name: "react-express", SourceType: domainapplication.SourceCompose, DefinitionCredentialID: &definitionID,
+		Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{ProjectName: "react-express", Services: []domainapplication.ComposeService{{Name: "backend", Build: true}}}},
+	}
+	runs, progress := &runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, &progressRepositoryStub{}
+	kubernetes := &composeKubernetesStub{manifests: []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata: {name: backend}\nspec: {template: {spec: {containers: [{name: backend, image: ignored}]}}}\n")}
+	publisher := &composeImagePublisherStub{images: map[string]string{"backend": "harbor.local/migrations/compose/react-express-backend:run-" + runID.String()}}
+	executor, err := NewComposeExecutor(
+		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID}}, runs, progress,
+		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
+			sourceID: {ID: sourceID, Role: domainenvironment.RoleSource, Kind: domainenvironment.KindDockerCompose, Endpoint: "ssh://compose:22", Status: domainenvironment.StatusConnected, CredentialID: &sourceCredentialID},
+			targetID: {ID: targetID, Role: domainenvironment.RoleTarget, Kind: domainenvironment.KindKubernetes, Status: domainenvironment.StatusConnected, CredentialID: &targetCredentialID},
+		}}, &applicationRepositoryStub{value: application}, &mappingRepositoryStub{value: domainmapping.Profile{ID: mappingID, TargetEnvironmentID: targetID}},
+		&executionVaultStub{values: map[uuid.UUID][]byte{definitionID: definition, targetCredentialID: []byte("target"), sourceCredentialID: sshCredential}},
+		kubernetes, transform.NewEngine(), "harbor/kompose@sha256:test", "harbor/helper@sha256:test",
+		WithComposeBuildImagePublishing(publisher, "harbor.local/migrations/compose", sshadapter.RegistryCredential{Username: "robot", Password: "secret"}, []byte(`{"auths":{"harbor.local":{}}}`), "migration-registry"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := executor.Handle(context.Background(), domainmigration.Lease{RunID: runID, StepType: domainmigration.StepPreflight}); err != nil {
+		t.Fatal(err)
+	}
+	if len(publisher.calls) != 1 || len(kubernetes.conversionSpecs) != 1 || len(progress.events) != 2 {
+		t.Fatalf("unexpected publishing flow: publisher=%+v conversions=%d events=%+v", publisher.calls, len(kubernetes.conversionSpecs), progress.events)
+	}
+	targetDefinition := string(kubernetes.conversionSpecs[0].ComposeYAML)
+	if !stringsContains(targetDefinition, publisher.images["backend"]) || stringsContains(targetDefinition, "build:") {
+		t.Fatalf("target conversion did not use the published image: %s", targetDefinition)
+	}
+	if string(composeYAML) != "services:\n  backend:\n    build:\n      context: /srv/backend\n" {
+		t.Fatal("source Compose definition was mutated")
+	}
+	runs.events = append([]domainmigration.Event(nil), progress.events...)
+	if err := executor.Handle(context.Background(), domainmigration.Lease{RunID: runID, StepType: domainmigration.StepRestore}); err != nil {
+		t.Fatal(err)
+	}
+	if kubernetes.namespaceEnsures != 1 || kubernetes.registrySecrets != 1 || len(kubernetes.applies) != 1 {
+		t.Fatalf("target registry preparation was not applied: %+v", kubernetes)
+	}
+	applied := string(kubernetes.applies[0].Manifests)
+	if !stringsContains(applied, "imagePullSecrets") || !stringsContains(applied, "migration-registry") {
+		t.Fatalf("published image pull secret was not injected into the target workload: %s", applied)
+	}
+}
+
+func TestPublishedBuildImageDropsOnlyDevelopmentMountsFromTarget(t *testing.T) {
+	composeYAML := []byte(`services:
+  api:
+    build:
+      context: /srv/api
+    volumes:
+      - type: bind
+        source: /srv/api
+        target: /workspace
+      - type: volume
+        target: /workspace/node_modules
+      - type: volume
+        source: business-data
+        target: /var/lib/app
+volumes:
+  business-data: {}
+`)
+	images := map[string]string{"api": "harbor.local/migrations/api:run-test"}
+	converted, err := composeYAMLWithPublishedImages(composeYAML, images)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(converted)
+	if stringsContains(text, "build:") || stringsContains(text, "/workspace") || !stringsContains(text, "business-data") {
+		t.Fatalf("development mounts were not pruned correctly:\n%s", text)
+	}
+	inventory := &domainapplication.ComposeInventory{Services: []domainapplication.ComposeService{{
+		Name: "api", Build: true, Mounts: []domainapplication.ComposeMount{
+			{Type: "bind", Source: "/srv/api", Target: "/workspace"},
+			{Type: "volume", Target: "/workspace/node_modules"},
+			{Type: "volume", Source: "business-data", Target: "/var/lib/app"},
+		},
+	}}}
+	filtered := composeInventoryForPublishedImages(inventory, composeYAML, images)
+	if len(filtered.Services[0].Mounts) != 1 || filtered.Services[0].Mounts[0].Source != "business-data" {
+		t.Fatalf("filtered inventory = %+v", filtered.Services[0].Mounts)
+	}
+	if len(inventory.Services[0].Mounts) != 3 {
+		t.Fatal("source inventory was mutated")
+	}
+}
+
+func TestComposeBuildImagePublishingOptionOwnsDockerConfig(t *testing.T) {
+	dockerConfig := []byte(`{"auths":{"harbor.local":{"auth":"dGVzdDp0ZXN0"}}}`)
+	option := WithComposeBuildImagePublishing(&composeImagePublisherStub{}, "harbor.local/migrations", sshadapter.RegistryCredential{Username: "test", Password: "test"}, dockerConfig, "registry-secret")
+	for index := range dockerConfig {
+		dockerConfig[index] = 0
+	}
+	executor := &ComposeExecutor{}
+	if err := option(executor); err != nil {
+		t.Fatal(err)
+	}
+	if !json.Valid(executor.registryDockerConfig) {
+		t.Fatal("executor retained the caller-owned Docker config buffer")
+	}
+}
+
 func TestComposeTargetNamespaceIsStable(t *testing.T) {
 	if got := composeTargetNamespace("My_App.Prod", nil); got != "my-app-prod" {
 		t.Fatalf("namespace = %q", got)
@@ -172,6 +281,23 @@ type composeKubernetesStub struct {
 	endpointValidations int
 	restores            []kubernetesadapter.KopiaRestoreSpec
 	scales              [][]kubernetesadapter.ScalableWorkload
+	conversionSpecs     []kubernetesadapter.KomposeJobSpec
+	namespaceEnsures    int
+	registrySecrets     int
+}
+
+type composeImagePublisherStub struct {
+	images map[string]string
+	calls  []sshadapter.ComposeImagePublishSpec
+}
+
+func (s *composeImagePublisherStub) PublishComposeImages(_ context.Context, _ string, _ sshadapter.Credential, spec sshadapter.ComposeImagePublishSpec) (map[string]string, error) {
+	s.calls = append(s.calls, spec)
+	result := map[string]string{}
+	for key, value := range s.images {
+		result[key] = value
+	}
+	return result, nil
 }
 
 type composeSourceMoverStub struct {
@@ -222,9 +348,19 @@ func (s *composeKubernetesStub) ScaleWorkloads(_ context.Context, _ []byte, valu
 	return nil
 }
 
-func (s *composeKubernetesStub) RunKomposeJob(context.Context, []byte, kubernetesadapter.KomposeJobSpec) ([]byte, error) {
+func (s *composeKubernetesStub) RunKomposeJob(_ context.Context, _ []byte, spec kubernetesadapter.KomposeJobSpec) ([]byte, error) {
 	s.conversions++
+	spec.ComposeYAML = append([]byte(nil), spec.ComposeYAML...)
+	s.conversionSpecs = append(s.conversionSpecs, spec)
 	return append([]byte(nil), s.manifests...), nil
+}
+func (s *composeKubernetesStub) EnsureMigrationNamespace(context.Context, []byte, string) error {
+	s.namespaceEnsures++
+	return nil
+}
+func (s *composeKubernetesStub) PutDockerConfigSecret(context.Context, []byte, string, string, []byte) error {
+	s.registrySecrets++
+	return nil
 }
 func (s *composeKubernetesStub) ApplyManifests(_ context.Context, _ []byte, value kubernetesadapter.ApplyManifestSpec) ([]kubernetesadapter.AppliedResource, error) {
 	value.Manifests = append([]byte(nil), value.Manifests...)
