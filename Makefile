@@ -87,7 +87,7 @@ offline-verify: go-build
 	./dist/offline verify --directory "$(OFFLINE_SOURCE)"
 
 offline-lab-amd64:
-	./scripts/build-lab-offline-bundle.sh "$(if $(OFFLINE_OUTPUT),$(OFFLINE_OUTPUT),$(ROOT_DIR)/output/sks-migration-center-0.1.0-amd64)"
+	./scripts/build-lab-offline-bundle.sh "$(if $(OFFLINE_OUTPUT),$(OFFLINE_OUTPUT),$(ROOT_DIR)/output/sks-migration-center-0.2.0-amd64)"
 
 vendor-velero-chart:
 	./scripts/vendor-velero-chart.sh deploy/charts/velero-12.1.0.tgz

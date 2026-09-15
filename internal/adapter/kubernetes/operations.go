@@ -55,10 +55,49 @@ func (c *Client) EnsureAddonNamespace(ctx context.Context, kubeconfig []byte, na
 	return c.ensureNamespace(ctx, kubeconfig, name, "privileged")
 }
 
-// EnsureMigrationNamespace permits Velero's restore-wait helper while keeping
-// host namespaces and privileged containers disallowed.
+// EnsureMigrationNamespace prepares an application namespace without adding a
+// Pod Security admission policy. Migration must preserve the workload's source
+// security context; compatibility findings are reported during assessment and
+// validation rather than silently changing the target admission boundary.
 func (c *Client) EnsureMigrationNamespace(ctx context.Context, kubeconfig []byte, name string) error {
-	return c.ensureNamespace(ctx, kubeconfig, name, "baseline")
+	if name == "" {
+		return errors.New("namespace name is required")
+	}
+	clientset, err := c.clientset(kubeconfig)
+	if err != nil {
+		return err
+	}
+	namespaces := clientset.CoreV1().Namespaces()
+	existing, err := namespaces.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
+		prepareMigrationNamespace(namespace, false)
+		_, err = namespaces.Create(ctx, namespace, metav1.CreateOptions{})
+	} else if err == nil {
+		existing = existing.DeepCopy()
+		wasManaged := existing.Labels["app.kubernetes.io/managed-by"] == "sks-migration-center"
+		prepareMigrationNamespace(existing, wasManaged)
+		_, err = namespaces.Update(ctx, existing, metav1.UpdateOptions{})
+	}
+	if err != nil {
+		return fmt.Errorf("ensure migration application namespace: %w", err)
+	}
+	return nil
+}
+
+func prepareMigrationNamespace(namespace *corev1.Namespace, removeManagedPodSecurity bool) {
+	if namespace.Labels == nil {
+		namespace.Labels = map[string]string{}
+	}
+	if namespace.Annotations == nil {
+		namespace.Annotations = map[string]string{}
+	}
+	if removeManagedPodSecurity {
+		delete(namespace.Labels, "pod-security.kubernetes.io/enforce")
+		delete(namespace.Labels, "pod-security.kubernetes.io/enforce-version")
+	}
+	namespace.Labels["app.kubernetes.io/managed-by"] = "sks-migration-center"
+	namespace.Annotations["k8tz.io/inject"] = "false"
 }
 
 func (c *Client) ensureNamespace(ctx context.Context, kubeconfig []byte, name, podSecurityLevel string) error {

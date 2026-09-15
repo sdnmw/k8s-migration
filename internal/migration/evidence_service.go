@@ -307,7 +307,7 @@ func (s *EvidenceService) resolve(ctx context.Context, runID uuid.UUID) (domainm
 	if err != nil {
 		return run, plan, domainapplication.SourceApplication{}, domainmapping.Profile{}, domainenvironment.Environment{}, domainenvironment.Environment{}, err
 	}
-	profile, err := s.mappings.Get(ctx, plan.MappingProfileID)
+	profile, err := resolveMappingProfile(ctx, s.mappings, plan)
 	if err != nil {
 		return run, plan, application, domainmapping.Profile{}, domainenvironment.Environment{}, domainenvironment.Environment{}, err
 	}

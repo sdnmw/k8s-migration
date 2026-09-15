@@ -7,9 +7,9 @@ set -eu
 # explicit about the intentionally relaxed signing and scan policy.
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-output_dir=${1:-"$root_dir/output/sks-migration-center-0.1.0-lab"}
+output_dir=${1:-"$root_dir/output/sks-migration-center-0.2.0-amd64"}
 staging_dir="$output_dir/staging"
-archive="$output_dir/sks-migration-center-0.1.0-linux-amd64.tar.gz"
+archive="$output_dir/sks-migration-center-0.2.0-linux-amd64.tar.gz"
 go_bin=${GO_BIN:-"$root_dir/.cache/toolchains/go/bin/go"}
 reuse_official_layouts_dir=${REUSE_OFFICIAL_LAYOUTS_DIR:-}
 

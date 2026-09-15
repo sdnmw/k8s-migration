@@ -84,7 +84,7 @@ func TestPlatformOnSKS(t *testing.T) {
 		ReleaseName: platformRelease,
 		Namespace:   platformNamespace,
 		ChartPath:   "sks-migration-center",
-		Version:     "0.1.0",
+		Version:     "0.2.0",
 		Timeout:     20 * time.Minute,
 		Values:      platformValues(),
 	})

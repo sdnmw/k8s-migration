@@ -47,7 +47,7 @@ func TestMigrationStateAndJobLeaseIntegration(t *testing.T) {
 	secondPlan := migration.Plan{
 		ID: uuid.New(), Name: "repository-plan-" + uuid.NewString(),
 		SourceEnvironmentID: fixture.sourceEnvironmentID, TargetEnvironmentID: fixture.targetEnvironmentID,
-		SourceApplicationID: fixture.applicationID, AssessmentID: fixture.assessmentID, MappingProfileID: fixture.mappingID,
+		SourceApplicationID: fixture.applicationID, AssessmentID: fixture.assessmentID, MappingProfileID: &fixture.mappingID,
 		Strategy:         migration.Strategy{ResourceMode: "TRANSFORM", VolumeMode: migration.VolumeFSBackup, PreSyncEnabled: true},
 		ValidationPolicy: migration.ValidationPolicy{RequireWorkloadsReady: true, RequirePVCsBound: true, TimeoutSeconds: 300},
 		Status:           migration.PlanDraft, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),

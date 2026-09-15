@@ -1,6 +1,6 @@
 apiVersion: migration.smartx.com/v1alpha1
 kind: OfflineComponentCatalog
-bundleVersion: 0.1.0
+bundleVersion: 0.2.0
 components:
   - {name: platform-api, owner: platform, releaseWindow: 16, required: true}
   - {name: platform-worker, owner: platform, releaseWindow: 16, required: true}

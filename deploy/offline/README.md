@@ -2,22 +2,22 @@
 
 正式发行物是一个包含 OCI Image Layout 的确定性 `tar.gz`，不依赖目标环境访问公网，也不要求目标主机安装 Docker、Skopeo、Crane 或 Helm CLI。
 
-## v0.1.0 AMD64 发行包
+## v0.2.0 AMD64 发行包
 
-GitHub Release 中的 `sks-migration-center-0.1.0-linux-amd64.tar.gz` 是一次性迁移场景的完整离线包。归档包含 16 个 `linux/amd64` OCI Image Layout、平台 Helm Chart、静态 Linux AMD64 安装器、镜像锁和校验清单。部署端不需要访问公网，也不要求预装 Docker、Skopeo、Crane 或 Helm CLI。
+GitHub Release 中的 `sks-migration-center-0.2.0-linux-amd64.tar.gz` 是一次性迁移场景的完整离线包。归档包含 16 个 `linux/amd64` OCI Image Layout、平台 Helm Chart、静态 Linux AMD64 安装器、镜像锁和校验清单。部署端不需要访问公网，也不要求预装 Docker、Skopeo、Crane 或 Helm CLI。
 
 下载后先校验同一 Release 中的 SHA-256 sidecar：
 
 ```bash
-shasum -a 256 -c sks-migration-center-0.1.0-linux-amd64.tar.gz.sha256
-tar -xzf sks-migration-center-0.1.0-linux-amd64.tar.gz
+shasum -a 256 -c sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256
+tar -xzf sks-migration-center-0.2.0-linux-amd64.tar.gz
 ```
 
 ## 发行侧组装
 
 1. 按 `components.yaml` 构建或获取全部必需镜像，并固定为 `linux/amd64`。
 2. 将每个镜像按已解析的 source digest 导出到 `images/<name>/` OCI Image Layout。
-3. 为每个镜像生成 SPDX JSON 清单、签名状态和扫描状态证据。按一次性迁移工具边界，v0.1.0 使用官方镜像并记录接受状态，不设置漏洞阻断门禁。
+3. 为每个镜像生成 SPDX JSON 清单、签名状态和扫描状态证据。按一次性迁移工具边界，v0.2.0 使用官方镜像并记录接受状态，不设置漏洞阻断门禁。
 4. 用真实值渲染 `images.lock.yaml.tmpl` 为 `images.lock.yaml`，并为后续窗口加入的镜像补齐条目。
 5. 将 `deploy/charts/`、CRD、安装配置和发行说明复制进 staging 目录后打包：
 

@@ -27,7 +27,7 @@ type migrationPlanInput struct {
 	TargetEnvironmentID uuid.UUID                        `json:"targetEnvironmentId"`
 	SourceApplicationID uuid.UUID                        `json:"sourceApplicationId"`
 	AssessmentID        uuid.UUID                        `json:"assessmentId"`
-	MappingProfileID    uuid.UUID                        `json:"mappingProfileId"`
+	MappingProfileID    *uuid.UUID                       `json:"mappingProfileId,omitempty"`
 	Strategy            domainmigration.Strategy         `json:"strategy"`
 	ValidationPolicy    domainmigration.ValidationPolicy `json:"validationPolicy"`
 }

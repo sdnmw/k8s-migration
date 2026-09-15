@@ -28,7 +28,7 @@ func TestComposeExecutorConvertsTransformsAppliesAndValidates(t *testing.T) {
 		Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{ProjectName: "Shop_App", Services: []domainapplication.ComposeService{{Name: "api", Image: "legacy.local/team/api:v1"}}}},
 	}
 	plan := domainmigration.Plan{
-		ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID,
+		ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID,
 		Strategy: domainmigration.Strategy{OverwriteExistingResources: true},
 	}
 	progress := &progressRepositoryStub{}
@@ -89,7 +89,7 @@ func TestComposeExecutorMirrorsBuildAndPublicImagesWithoutChangingSourceDefiniti
 		"mongo":   "harbor.local/sks-compose-react-express/react-express-mongo:run-" + runID.String(),
 	}}
 	executor, err := NewComposeExecutor(
-		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID}}, runs, progress,
+		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID}}, runs, progress,
 		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
 			sourceID: {ID: sourceID, Role: domainenvironment.RoleSource, Kind: domainenvironment.KindDockerCompose, Endpoint: "ssh://compose:22", Status: domainenvironment.StatusConnected, CredentialID: &sourceCredentialID},
 			targetID: {ID: targetID, Role: domainenvironment.RoleTarget, Kind: domainenvironment.KindKubernetes, Status: domainenvironment.StatusConnected, CredentialID: &targetCredentialID},
@@ -255,7 +255,7 @@ func TestComposeExecutorMigratesKopiaVolumeAndRestartsSourceOnRollback(t *testin
 	application := domainapplication.SourceApplication{ID: appID, EnvironmentID: sourceID, Name: "shop", SourceType: domainapplication.SourceCompose, DefinitionCredentialID: &definitionID, Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{
 		ProjectName: "shop", Services: []domainapplication.ComposeService{{Name: "redis", Image: "redis:7", Mounts: []domainapplication.ComposeMount{{Type: "volume", Source: "data", Target: "/data"}}}}, Volumes: []domainapplication.ComposeResource{{Name: "data", RuntimeName: "shop_data"}},
 	}}}
-	plan := domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeComposeKopia, OverwriteExistingResources: true}}
+	plan := domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeComposeKopia, OverwriteExistingResources: true}}
 	progress, runs, mover := &progressRepositoryStub{}, &runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, &composeSourceMoverStub{}
 	kubernetes := &composeKubernetesStub{manifests: []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: redis\n  labels:\n    io.kompose.service: redis\nspec:\n  replicas: 1\n  template:\n    spec:\n      containers:\n      - name: redis\n        image: redis:7\n        volumeMounts:\n        - name: data\n          mountPath: /data\n      volumes:\n      - name: data\n        persistentVolumeClaim:\n          claimName: data\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: data\nspec:\n  accessModes: [ReadWriteOnce]\n  resources:\n    requests:\n      storage: 100Mi\n")}
 	executor, err := NewComposeExecutor(
@@ -410,7 +410,7 @@ func composeExecutorFixture(t *testing.T, volumes []domainapplication.VolumeSumm
 	definitionID, targetCredentialID := uuid.New(), uuid.New()
 	definition, _ := json.Marshal(domainapplication.ComposeDefinition{ComposeYAML: []byte("services: {}")})
 	executor, err := NewComposeExecutor(
-		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID}},
+		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID}},
 		&runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, &progressRepositoryStub{},
 		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
 			sourceID: {ID: sourceID, Role: domainenvironment.RoleSource, Kind: domainenvironment.KindDockerCompose, Status: domainenvironment.StatusConnected},

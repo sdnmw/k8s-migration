@@ -309,7 +309,7 @@ export type ValidationPolicy = {
 }
 export type MigrationPlanInput = {
   name: string; sourceEnvironmentId: string; targetEnvironmentId: string; sourceApplicationId: string
-  assessmentId: string; mappingProfileId: string; strategy: MigrationStrategy; validationPolicy: ValidationPolicy
+  assessmentId: string; mappingProfileId?: string; strategy: MigrationStrategy; validationPolicy: ValidationPolicy
 }
 export type MigrationPlan = MigrationPlanInput & { id: string; status: 'DRAFT' | 'READY' | 'BLOCKED' | 'RUNNING' | 'COMPLETED' | 'FAILED'; createdAt: string; updatedAt: string }
 export type PreflightCheck = { id: string; category: string; status: 'PASSED' | 'WARNING' | 'BLOCKER'; title: string; message: string; remediation?: string }

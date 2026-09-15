@@ -15,28 +15,28 @@ SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用�
 - 目标集群节点能够从 Harbor 拉取镜像；
 - 目标集群中可用的 SmartX ELF CSI RWO StorageClass，或明确指定其他 RWO StorageClass。
 
-完整离线包发布在 [GitHub Release v0.1.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.1.0)：
+完整离线包发布在 [GitHub Release v0.2.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.2.0)：
 
-- `sks-migration-center-0.1.0-linux-amd64.tar.gz`
-- `sks-migration-center-0.1.0-linux-amd64.tar.gz.sha256`
+- `sks-migration-center-0.2.0-linux-amd64.tar.gz`
+- `sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256`
 
 归档包含 16 个 `linux/amd64` OCI 镜像、平台和 Add-on Helm Chart、镜像锁、静态安装器及校验清单。安装过程不访问公网，也不要求目标终端安装 Docker、Helm、Skopeo 或 Crane。
 
 ### 2. 校验并解压
 
 ```bash
-sha256sum -c sks-migration-center-0.1.0-linux-amd64.tar.gz.sha256
+sha256sum -c sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256
 
-mkdir -p sks-migration-center-0.1.0
-tar -xzf sks-migration-center-0.1.0-linux-amd64.tar.gz \
-  -C sks-migration-center-0.1.0
-cd sks-migration-center-0.1.0
+mkdir -p sks-migration-center-0.2.0
+tar -xzf sks-migration-center-0.2.0-linux-amd64.tar.gz \
+  -C sks-migration-center-0.2.0
+cd sks-migration-center-0.2.0
 ```
 
-当前发行归档 SHA-256 为：
+当前发行归档 SHA-256：
 
 ```text
-9361d6f020c723e73365af489904e8c69c575f238762ebd93719261645906a07
+4e823908a8c3f9bb388c893a2d79a79cf5f6cf2b30c28729fbfcf926702ff3b4
 ```
 
 ### 3. 准备凭据文件
@@ -113,7 +113,7 @@ kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
 
 ### 1. 平台迁移时序
 
-创建迁移时，用户依次选择源环境、源应用或资源组合、目标 SKS、资源映射、迁移策略和验证策略。Assessment 中存在未解决的 BLOCKER 时不能创建迁移计划。
+创建迁移时，用户依次选择源环境、源应用或资源组合、目标 SKS、可选资源映射、迁移策略和验证策略。未选择映射时，Compose 按项目名自动创建 Namespace；Kubernetes 保留源 Namespace 和资源字段，并在需要时使用目标集群默认值。只有命中的映射规则才会改写资源。Assessment 中存在未解决的 BLOCKER 时不能创建迁移计划。
 
 每次 Migration Run 固定执行以下步骤，界面的“执行时序”与这些状态一一对应：
 
@@ -152,7 +152,7 @@ PREFLIGHT
 3. **预同步**：Velero 在源集群创建预同步 Backup。未挂载 PVC 会使用临时 staging Pod；node-agent 将卷数据写入目标集群可访问的 S3/MinIO。
 4. **停止源业务**：存在 PVC 时，平台保存所选 Deployment/StatefulSet 的副本数并缩容到 `0`。手选资源只停止迁移清单中的工作负载。没有 PVC 时不停止源业务，此步骤记录为无需停机。
 5. **最终备份和传输确认**：源端静止后创建最终 Backup，并等待 FSB/DataUpload 完成。源、目标 Velero 通过同一对象存储同步备份元数据。
-6. **转换与恢复**：恢复前应用 Namespace 和 StorageClass 映射；Velero Restore 完成后再对目标资源实际应用 Registry/Image、IngressClass、NodeLabel 和 NFS 等可变字段映射，并逐项确认映射已经生效。
+6. **转换与恢复**：恢复前只应用实际命中的 Namespace 和 StorageClass 映射；未匹配时保留源值或使用目标默认 StorageClass。Velero Restore 完成后再对目标资源实际应用 Registry/Image、IngressClass、NodeLabel 和 NFS 等可变字段映射，并逐项确认映射已经生效。业务 Namespace 不会被平台额外强制设置 Pod Security Admission 等级。
 7. **验证**：平台等待工作负载 Ready、PVC Bound，检查 Service selector、Ingress 后端、ConfigMap/Secret/RBAC 存在性以及配置的 HTTP/TCP 探测。验证会收集所有资源结果，而不是遇到第一个错误就停止。
 8. **等待切流**：验证通过后进入 `AWAITING_CUTOVER`，由管理员在平台外修改 DNS、负载均衡或防火墙，再点击确认切流。
 

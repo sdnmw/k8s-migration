@@ -20,7 +20,7 @@ func TestVeleroExecutorRunsPreSyncFinalTransferAndRestore(t *testing.T) {
 	runID, planID, applicationID, sourceID, targetID, mappingID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	sourceCredential, targetCredential := uuid.New(), uuid.New()
 	plan := domainmigration.Plan{
-		ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: applicationID, MappingProfileID: mappingID,
+		ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: applicationID, MappingProfileID: &mappingID,
 		Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeFSBackup, PreSyncEnabled: true},
 	}
 	runs := &runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}
@@ -118,7 +118,7 @@ func TestVeleroExecutorUsesCSIDataMoverWithoutFilesystemStaging(t *testing.T) {
 	}
 	kubernetes := &kubernetesExecutionStub{}
 	executor, err := NewVeleroExecutor(
-		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeCSIDataMover}}},
+		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeCSIDataMover}}},
 		&runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, progress,
 		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
 			sourceID: {ID: sourceID, CredentialID: &sourceCredential, Capabilities: domainenvironment.Capabilities{
@@ -155,7 +155,7 @@ func veleroExecutorFixture(t *testing.T, velero *veleroExecutionStub) (*VeleroEx
 	runID, planID, appID, sourceID, targetID, mappingID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	sourceCredential, targetCredential := uuid.New(), uuid.New()
 	executor, err := NewVeleroExecutor(
-		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeFSBackup}}},
+		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: &mappingID, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeFSBackup}}},
 		&runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, &progressRepositoryStub{},
 		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
 			sourceID: {ID: sourceID, CredentialID: &sourceCredential}, targetID: {ID: targetID, CredentialID: &targetCredential},

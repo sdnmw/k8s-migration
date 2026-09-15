@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SKS Migration Center API
-  version: 0.1.0
+  version: 0.2.0
   description: API contract for Kubernetes and Docker Compose migrations to SmartX SKS workload clusters.
   license:
     name: Proprietary
@@ -1874,14 +1874,14 @@ components:
     MigrationPlanInput:
       type: object
       additionalProperties: false
-      required: [name, sourceEnvironmentId, targetEnvironmentId, sourceApplicationId, assessmentId, mappingProfileId, strategy, validationPolicy]
+      required: [name, sourceEnvironmentId, targetEnvironmentId, sourceApplicationId, assessmentId, strategy, validationPolicy]
       properties:
         name: { type: string, minLength: 1, maxLength: 128 }
         sourceEnvironmentId: { type: string, format: uuid }
         targetEnvironmentId: { type: string, format: uuid }
         sourceApplicationId: { type: string, format: uuid }
         assessmentId: { type: string, format: uuid }
-        mappingProfileId: { type: string, format: uuid }
+        mappingProfileId: { type: string, format: uuid, description: Optional mapping overrides. When omitted the target namespace is created automatically and source values are preserved or resolved through target defaults. }
         strategy: { $ref: "#/components/schemas/MigrationStrategy" }
         validationPolicy: { $ref: "#/components/schemas/ValidationPolicy" }
     MigrationPlan:

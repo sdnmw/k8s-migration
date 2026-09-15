@@ -44,6 +44,17 @@ func TestCreateMigrationPlanDecodesStrategyAndValidation(t *testing.T) {
 	}
 }
 
+func TestCreateMigrationPlanAcceptsOmittedMappingProfile(t *testing.T) {
+	ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New(), uuid.New()}
+	service := &migrationPlanServiceStub{plan: domainmigration.Plan{ID: uuid.New(), Name: "api", Status: domainmigration.PlanDraft}}
+	body := `{"name":"api","sourceEnvironmentId":"` + ids[0].String() + `","targetEnvironmentId":"` + ids[1].String() + `","sourceApplicationId":"` + ids[2].String() + `","assessmentId":"` + ids[3].String() + `","strategy":{"resourceMode":"TRANSFORM","volumeMode":"NONE","preSyncEnabled":false,"overwriteExistingResources":false,"preserveNodePort":false},"validationPolicy":{"requireWorkloadsReady":true,"requirePVCsBound":true,"timeoutSeconds":300}}`
+	recorder := httptest.NewRecorder()
+	createMigrationPlanHandler(Dependencies{MigrationPlans: service}).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/migration-plans", strings.NewReader(body)))
+	if recorder.Code != http.StatusCreated || service.input.MappingProfileID != nil {
+		t.Fatalf("status=%d mapping=%v body=%s", recorder.Code, service.input.MappingProfileID, recorder.Body.String())
+	}
+}
+
 func TestMigrationPlanPreflightReturnsBlockersAndMapsErrors(t *testing.T) {
 	service := &migrationPlanServiceStub{result: domainmigration.PreflightResult{PlanID: uuid.New(), Ready: false, BlockerCount: 1, Checks: []domainmigration.PreflightCheck{{ID: "target.smartx-csi", Status: domainmigration.PreflightBlocker}}}}
 	recorder := httptest.NewRecorder()

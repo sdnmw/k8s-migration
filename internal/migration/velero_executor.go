@@ -208,7 +208,7 @@ func (e *VeleroExecutor) resolve(ctx context.Context, runID uuid.UUID) (executio
 	if err != nil {
 		return executionContext{}, err
 	}
-	mapping, err := e.mappings.Get(ctx, plan.MappingProfileID)
+	mapping, err := resolveMappingProfile(ctx, e.mappings, plan)
 	if err != nil {
 		return executionContext{}, err
 	}

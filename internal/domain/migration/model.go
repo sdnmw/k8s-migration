@@ -73,7 +73,7 @@ type Plan struct {
 	TargetEnvironmentID uuid.UUID        `json:"targetEnvironmentId"`
 	SourceApplicationID uuid.UUID        `json:"sourceApplicationId"`
 	AssessmentID        uuid.UUID        `json:"assessmentId"`
-	MappingProfileID    uuid.UUID        `json:"mappingProfileId"`
+	MappingProfileID    *uuid.UUID       `json:"mappingProfileId,omitempty"`
 	Strategy            Strategy         `json:"strategy"`
 	ValidationPolicy    ValidationPolicy `json:"validationPolicy"`
 	Status              PlanStatus       `json:"status"`
@@ -364,8 +364,11 @@ func (p Plan) Validate() error {
 	if strings.TrimSpace(p.Name) == "" || len(strings.TrimSpace(p.Name)) > 128 {
 		return errors.New("name is required and must not exceed 128 characters")
 	}
-	if p.SourceEnvironmentID == uuid.Nil || p.TargetEnvironmentID == uuid.Nil || p.SourceApplicationID == uuid.Nil || p.AssessmentID == uuid.Nil || p.MappingProfileID == uuid.Nil {
-		return errors.New("source, target, application, assessment and mapping IDs are required")
+	if p.SourceEnvironmentID == uuid.Nil || p.TargetEnvironmentID == uuid.Nil || p.SourceApplicationID == uuid.Nil || p.AssessmentID == uuid.Nil {
+		return errors.New("source, target, application and assessment IDs are required")
+	}
+	if p.MappingProfileID != nil && *p.MappingProfileID == uuid.Nil {
+		return errors.New("mappingProfileId must be omitted or contain a valid ID")
 	}
 	if p.SourceEnvironmentID == p.TargetEnvironmentID {
 		return errors.New("source and target environments must differ")

@@ -205,7 +205,7 @@ func deployBundle(args []string, output io.Writer) error {
 	}
 	state, err := manager.InstallOrUpgrade(ctx, append([]byte(nil), kubeconfig...), addon.InstallRequest{
 		ReleaseName: defaultPlatformNamespace, Namespace: options.namespace, ChartPath: "sks-migration-center",
-		Version: "0.1.0", Values: values, Timeout: 30 * time.Minute,
+		Version: "0.2.0", Values: values, Timeout: 30 * time.Minute,
 	})
 	if err != nil {
 		return err

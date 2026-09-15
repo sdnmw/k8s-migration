@@ -211,7 +211,7 @@ func (e *ComposeExecutor) resolve(ctx context.Context, runID uuid.UUID) (compose
 	if target.Kind != domainenvironment.KindKubernetes || target.Role != domainenvironment.RoleTarget || target.CredentialID == nil || target.Status != domainenvironment.StatusConnected {
 		return composeExecutionContext{}, fmt.Errorf("%w: connected Kubernetes target is required", ErrUnsupportedExecution)
 	}
-	mapping, err := e.mappings.Get(ctx, plan.MappingProfileID)
+	mapping, err := resolveMappingProfile(ctx, e.mappings, plan)
 	if err != nil {
 		return composeExecutionContext{}, err
 	}

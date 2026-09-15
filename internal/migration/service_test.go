@@ -123,6 +123,29 @@ func TestCreateAndPreflightReadyPlan(t *testing.T) {
 	}
 }
 
+func TestCreateAndPreflightPlanWithoutMappingProfile(t *testing.T) {
+	service, _, input := readyFixture(t)
+	input.MappingProfileID = nil
+	application := service.applications.(*applicationRepositoryStub).value
+	application.Inventory.PVCs[0].StorageClassName = ""
+	service.applications.(*applicationRepositoryStub).value = application
+
+	created, err := service.Create(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.MappingProfileID != nil {
+		t.Fatalf("optional mapping profile was unexpectedly populated: %v", created.MappingProfileID)
+	}
+	result, err := service.Preflight(context.Background(), created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Ready || result.BlockerCount != 0 {
+		t.Fatalf("automatic target defaults should pass preflight: %+v", result)
+	}
+}
+
 func TestPreflightBlocksAssessmentAndMissingSmartXCSI(t *testing.T) {
 	service, plans, input := readyFixture(t)
 	created, err := service.Create(context.Background(), input)
@@ -255,6 +278,6 @@ func readyFixture(t *testing.T) (*Service, *planRepositoryStub, domainmigration.
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := domainmigration.Plan{Name: "Production API", SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: applicationID, AssessmentID: assessmentID, MappingProfileID: mappingID, Strategy: domainmigration.Strategy{ResourceMode: "TRANSFORM", VolumeMode: domainmigration.VolumeFSBackup, PreSyncEnabled: true}, ValidationPolicy: domainmigration.ValidationPolicy{RequireWorkloadsReady: true, RequirePVCsBound: true, TimeoutSeconds: 300}}
+	input := domainmigration.Plan{Name: "Production API", SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: applicationID, AssessmentID: assessmentID, MappingProfileID: &mappingID, Strategy: domainmigration.Strategy{ResourceMode: "TRANSFORM", VolumeMode: domainmigration.VolumeFSBackup, PreSyncEnabled: true}, ValidationPolicy: domainmigration.ValidationPolicy{RequireWorkloadsReady: true, RequirePVCsBound: true, TimeoutSeconds: 300}}
 	return service, plans, input
 }

@@ -100,9 +100,10 @@ func (r *MigrationRepository) UpdatePlanStatus(ctx context.Context, id uuid.UUID
 
 func scanMigrationPlan(row scanner) (migration.Plan, error) {
 	var value migration.Plan
+	var mappingProfileID *uuid.UUID
 	var strategy, validationPolicy []byte
 	err := row.Scan(&value.ID, &value.Name, &value.SourceEnvironmentID, &value.TargetEnvironmentID,
-		&value.SourceApplicationID, &value.AssessmentID, &value.MappingProfileID, &strategy, &validationPolicy,
+		&value.SourceApplicationID, &value.AssessmentID, &mappingProfileID, &strategy, &validationPolicy,
 		&value.Status, &value.CreatedAt, &value.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return migration.Plan{}, repository.ErrNotFound
@@ -110,6 +111,7 @@ func scanMigrationPlan(row scanner) (migration.Plan, error) {
 	if err != nil {
 		return migration.Plan{}, fmt.Errorf("scan migration plan: %w", err)
 	}
+	value.MappingProfileID = mappingProfileID
 	if err := json.Unmarshal(strategy, &value.Strategy); err != nil {
 		return migration.Plan{}, fmt.Errorf("decode migration strategy: %w", err)
 	}

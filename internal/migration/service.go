@@ -150,11 +150,18 @@ func (s *Service) references(ctx context.Context, plan domainmigration.Plan) (do
 	if err != nil {
 		return domainenvironment.Environment{}, domainenvironment.Environment{}, domainapplication.SourceApplication{}, domainassessment.Assessment{}, domainmapping.Profile{}, err
 	}
-	profile, err := s.mappings.Get(ctx, plan.MappingProfileID)
+	profile, err := resolveMappingProfile(ctx, s.mappings, plan)
 	if err != nil {
 		return domainenvironment.Environment{}, domainenvironment.Environment{}, domainapplication.SourceApplication{}, domainassessment.Assessment{}, domainmapping.Profile{}, err
 	}
 	return source, target, application, assessment, profile, nil
+}
+
+func resolveMappingProfile(ctx context.Context, mappings repository.MappingRepository, plan domainmigration.Plan) (domainmapping.Profile, error) {
+	if plan.MappingProfileID == nil {
+		return domainmapping.Profile{Name: "自动目标配置", TargetEnvironmentID: plan.TargetEnvironmentID}, nil
+	}
+	return mappings.Get(ctx, *plan.MappingProfileID)
 }
 
 func connectionCheck(id, category, title string, environment domainenvironment.Environment) domainmigration.PreflightCheck {

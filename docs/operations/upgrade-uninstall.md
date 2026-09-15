@@ -15,6 +15,6 @@
 - 卸载接口只删除受管的 `sks-migration-velero` Helm release；MinIO PVC、Bucket 数据与云凭证 Secret 默认保留。
 - 非 Helm 管理或 release name 不匹配的已有 Velero 不会被接管或覆盖。可在对象存储页选择“复用已有 Velero”：系统只验证现有 Server/node-agent，创建迁移专用凭证 Secret 和 `migration-minio` BSL，不改 Deployment/DaemonSet。
 - 复用模式下源环境 BSL 使用 `ReadWrite`，目标环境使用 `ReadOnly`；两边必须指向同一 Bucket 和 Prefix。外部管理的 Velero 不显示卸载按钮。
-- FSB 恢复前，执行器会为目标迁移 Namespace 设置 `baseline` Pod Security，以兼容 Velero 1.13 的 `restore-wait` 辅助容器；评估仍负责阻止不满足目标安全约束的业务工作负载。
+- 业务迁移 Namespace 不再由平台强制设置 Pod Security Admission 等级。源工作负载的安全上下文保持不变，兼容性问题由迁移评估和目标验证显式报告；Velero 等平台插件仍只在各自的插件 Namespace 使用所需安全策略。
 - StorageClass 映射使用整个 `velero` Namespace 唯一的共享 ConfigMap。各迁移映射按 run 注解合并；相同源 StorageClass 映射到不同目标时直接报冲突，避免 Velero 插件因多个配置对象而使恢复部分失败。
 - 备份清理在源端提交 Velero `DeleteBackupRequest`，等待控制器删除对象存储内容；目标端只删除同步 Backup CR 和 Restore CR。
