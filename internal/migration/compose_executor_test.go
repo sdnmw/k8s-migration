@@ -72,19 +72,22 @@ func TestComposeExecutorBlocksVolumesUntilKopiaPath(t *testing.T) {
 	}
 }
 
-func TestComposeExecutorPublishesBuildOnlyImagesWithoutChangingSourceDefinition(t *testing.T) {
+func TestComposeExecutorMirrorsBuildAndPublicImagesWithoutChangingSourceDefinition(t *testing.T) {
 	runID, planID, appID, sourceID, targetID, mappingID := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	definitionID, targetCredentialID, sourceCredentialID := uuid.New(), uuid.New(), uuid.New()
-	composeYAML := []byte("services:\n  backend:\n    build:\n      context: /srv/backend\n")
+	composeYAML := []byte("services:\n  backend:\n    build:\n      context: /srv/backend\n  mongo:\n    image: mongo:8\n")
 	definition, _ := json.Marshal(domainapplication.ComposeDefinition{ComposeYAML: composeYAML})
 	sshCredential, _ := json.Marshal(map[string]string{"username": "migration", "privateKey": "key", "hostKeyFingerprint": "SHA256:test"})
 	application := domainapplication.SourceApplication{
 		ID: appID, EnvironmentID: sourceID, Name: "react-express", SourceType: domainapplication.SourceCompose, DefinitionCredentialID: &definitionID,
-		Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{ProjectName: "react-express", Services: []domainapplication.ComposeService{{Name: "backend", Build: true}}}},
+		Inventory: domainapplication.Inventory{Compose: &domainapplication.ComposeInventory{ProjectName: "react-express", Services: []domainapplication.ComposeService{{Name: "backend", Build: true}, {Name: "mongo", Image: "mongo:8"}}}},
 	}
 	runs, progress := &runRepositoryStub{run: domainmigration.Run{ID: runID, PlanID: planID}}, &progressRepositoryStub{}
 	kubernetes := &composeKubernetesStub{manifests: []byte("apiVersion: apps/v1\nkind: Deployment\nmetadata: {name: backend}\nspec: {template: {spec: {containers: [{name: backend, image: ignored}]}}}\n")}
-	publisher := &composeImagePublisherStub{images: map[string]string{"backend": "harbor.local/migrations/compose/react-express-backend:run-" + runID.String()}}
+	publisher := &composeImagePublisherStub{images: map[string]string{
+		"backend": "harbor.local/sks-compose-react-express/react-express-backend:run-" + runID.String(),
+		"mongo":   "harbor.local/sks-compose-react-express/react-express-mongo:run-" + runID.String(),
+	}}
 	executor, err := NewComposeExecutor(
 		&runPlanRepositoryStub{plan: domainmigration.Plan{ID: planID, SourceEnvironmentID: sourceID, TargetEnvironmentID: targetID, SourceApplicationID: appID, MappingProfileID: mappingID}}, runs, progress,
 		&environmentRepositoryStub{values: map[uuid.UUID]domainenvironment.Environment{
@@ -94,6 +97,7 @@ func TestComposeExecutorPublishesBuildOnlyImagesWithoutChangingSourceDefinition(
 		&executionVaultStub{values: map[uuid.UUID][]byte{definitionID: definition, targetCredentialID: []byte("target"), sourceCredentialID: sshCredential}},
 		kubernetes, transform.NewEngine(), "harbor/kompose@sha256:test", "harbor/helper@sha256:test",
 		WithComposeBuildImagePublishing(publisher, "harbor.local/migrations/compose", sshadapter.RegistryCredential{Username: "robot", Password: "secret"}, []byte(`{"auths":{"harbor.local":{}}}`), "migration-registry"),
+		WithComposeRegistryProjectManager(&composeRegistryProjectManagerStub{repository: "harbor.local/sks-compose-react-express"}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -104,11 +108,14 @@ func TestComposeExecutorPublishesBuildOnlyImagesWithoutChangingSourceDefinition(
 	if len(publisher.calls) != 1 || len(kubernetes.conversionSpecs) != 1 || len(progress.events) != 2 {
 		t.Fatalf("unexpected publishing flow: publisher=%+v conversions=%d events=%+v", publisher.calls, len(kubernetes.conversionSpecs), progress.events)
 	}
+	if len(publisher.calls[0].Services) != 2 || publisher.calls[0].SourceImages["mongo"] != "mongo:8" {
+		t.Fatalf("all service images were not mirrored: %+v", publisher.calls[0])
+	}
 	targetDefinition := string(kubernetes.conversionSpecs[0].ComposeYAML)
-	if !stringsContains(targetDefinition, publisher.images["backend"]) || stringsContains(targetDefinition, "build:") {
+	if !stringsContains(targetDefinition, publisher.images["backend"]) || !stringsContains(targetDefinition, publisher.images["mongo"]) || stringsContains(targetDefinition, "build:") {
 		t.Fatalf("target conversion did not use the published image: %s", targetDefinition)
 	}
-	if string(composeYAML) != "services:\n  backend:\n    build:\n      context: /srv/backend\n" {
+	if string(composeYAML) != "services:\n  backend:\n    build:\n      context: /srv/backend\n  mongo:\n    image: mongo:8\n" {
 		t.Fatal("source Compose definition was mutated")
 	}
 	runs.events = append([]domainmigration.Event(nil), progress.events...)
@@ -163,6 +170,18 @@ volumes:
 	}
 	if len(inventory.Services[0].Mounts) != 3 {
 		t.Fatal("source inventory was mutated")
+	}
+}
+
+func TestMirroredPublicImageKeepsApplicationVolumes(t *testing.T) {
+	composeYAML := []byte("services:\n  mongo:\n    image: mongo:8\n    volumes: [data:/data/db]\nvolumes:\n  data: {}\n")
+	converted, err := composeYAMLWithPublishedImages(composeYAML, map[string]string{"mongo": "harbor.local/sks-compose-shop/shop-mongo:run-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(converted)
+	if !stringsContains(text, "data:/data/db") || !stringsContains(text, "harbor.local/sks-compose-shop/shop-mongo:run-1") {
+		t.Fatalf("public image mirroring removed an application volume:\n%s", text)
 	}
 }
 
@@ -289,6 +308,15 @@ type composeKubernetesStub struct {
 type composeImagePublisherStub struct {
 	images map[string]string
 	calls  []sshadapter.ComposeImagePublishSpec
+}
+
+type composeRegistryProjectManagerStub struct {
+	repository string
+	err        error
+}
+
+func (s *composeRegistryProjectManagerStub) EnsurePublicProject(context.Context, string) (string, error) {
+	return s.repository, s.err
 }
 
 func (s *composeImagePublisherStub) PublishComposeImages(_ context.Context, _ string, _ sshadapter.Credential, spec sshadapter.ComposeImagePublishSpec) (map[string]string, error) {

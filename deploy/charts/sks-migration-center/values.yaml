@@ -2,6 +2,9 @@ global:
   storageClass: ""
   imagePullSecrets: []
   composeImageRepository: ""
+  composeHarborEndpoint: ""
+  composeHarborProjectPrefix: sks-compose
+  composeHarborInsecure: false
   registryPullSecretName: sks-migration-registry
 
 image:

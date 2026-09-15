@@ -158,8 +158,8 @@ PREFLIGHT
 
 ### 3. Docker Compose → SKS
 
-1. **发现应用**：Compose 主机通过 SSH 导入。平台使用受控命令读取 `docker compose ls -a`，发现运行中和已停止的项目；也可以手动注册 compose 文件。平台解析 Service、镜像、端口、`depends_on`、网络、named volume、允许目录内的 bind mount、config、secret、`.env` 和 profiles。
-2. **预检与候选清单**：平台在目标集群的隔离 Job 中运行 Kompose，再经过 Assessment、Transform 和 Diff 生成候选 Kubernetes 清单。前端不会向 SSH 主机开放任意 Shell。
+1. **发现应用**：Compose 主机通过 SSH 导入。平台使用受控命令读取 `docker compose ls -a`，发现运行中和已停止的项目，并在源主机解析 include、override、`.env` 和 `env_file`。单个项目配置失效时只跳过该项目，不再阻断同一主机上的其他应用；手动上传仅用于不引用外部文件的自包含 compose 文件。平台解析 Service、镜像、端口、`depends_on`、网络、named volume、允许目录内的 bind mount、config、secret 和 profiles。
+2. **镜像收口与预检**：不论服务使用本地 build 镜像还是公有镜像，平台都先从源主机解析实际镜像，推送到安装时关联的 Harbor。平台优先创建 `<安装项目>-compose-<应用名>` 公开项目；无项目创建权限时降级到 `Harbor/library`。只有真实 image push 或后续目标拉取失败才阻断。之后平台在目标集群的隔离 Job 中运行 Kompose，再经过 Assessment、Transform 和 Diff 生成候选 Kubernetes 清单。源 compose 文件不会被改写，前端也不会向 SSH 主机开放任意 Shell。
 3. **预同步**：存在 named volume 或允许的 bind mount 时，受控 Kopia 辅助容器在 Compose 仍运行期间把卷数据预同步到 S3/MinIO。无数据卷应用跳过实际数据传输。
 4. **停止源业务**：存在需迁移的数据卷时执行受控的 Compose stop，并记录停止事件。无卷应用保持运行。
 5. **最终同步**：源服务停止后对每个卷执行增量 Kopia Snapshot，确保迁移数据对应停机时刻的文件状态。平台保证正常停止后的文件级一致性，不提供数据库在线复制。

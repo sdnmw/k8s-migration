@@ -251,10 +251,12 @@ func (s *Service) DiscoverCompose(ctx context.Context, environmentID uuid.UUID) 
 		return nil, fmt.Errorf("%w: Compose project discovery failed", ErrDiscovery)
 	}
 	result := make([]domainapplication.SourceApplication, 0, len(projects))
+	failed := make([]string, 0)
 	for _, project := range projects {
 		value, registerErr := s.RegisterCompose(ctx, environmentID, project.Name, project.ComposeYAML, nil)
 		if registerErr != nil {
-			return result, fmt.Errorf("%w: 项目 %s 解析失败：%v", ErrDiscovery, project.Name, registerErr)
+			failed = append(failed, project.Name)
+			continue
 		}
 		if value.Inventory.Compose != nil {
 			value.Inventory.Compose.Status = project.Status
@@ -265,7 +267,12 @@ func (s *Service) DiscoverCompose(ctx context.Context, environmentID uuid.UUID) 
 		}
 		if registerErr == nil {
 			result = append(result, value)
+		} else {
+			failed = append(failed, project.Name)
 		}
+	}
+	if len(result) == 0 && len(failed) > 0 {
+		return nil, fmt.Errorf("%w: Compose 项目解析失败：%s", ErrDiscovery, strings.Join(failed, ", "))
 	}
 	return result, nil
 }

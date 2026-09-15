@@ -54,23 +54,26 @@ type VeleroImages struct {
 }
 
 type Worker struct {
-	Environment              string
-	Version                  string
-	LogLevel                 slog.Level
-	HeartbeatInterval        time.Duration
-	PollInterval             time.Duration
-	LeaseDuration            time.Duration
-	RetryDelay               time.Duration
-	Database                 Database
-	CredentialMasterKeyFile  string
-	CredentialKeyVersion     int
-	StagingHelperImage       string
-	KomposeImage             string
-	KopiaImage               string
-	MetricsAddr              string
-	ComposeImageRepository   string
-	RegistryDockerConfigFile string
-	RegistryPullSecretName   string
+	Environment                string
+	Version                    string
+	LogLevel                   slog.Level
+	HeartbeatInterval          time.Duration
+	PollInterval               time.Duration
+	LeaseDuration              time.Duration
+	RetryDelay                 time.Duration
+	Database                   Database
+	CredentialMasterKeyFile    string
+	CredentialKeyVersion       int
+	StagingHelperImage         string
+	KomposeImage               string
+	KopiaImage                 string
+	MetricsAddr                string
+	ComposeImageRepository     string
+	ComposeHarborEndpoint      string
+	ComposeHarborProjectPrefix string
+	ComposeHarborInsecure      bool
+	RegistryDockerConfigFile   string
+	RegistryPullSecretName     string
 }
 
 type Database struct {
@@ -185,6 +188,10 @@ func LoadWorker() (Worker, error) {
 	if err != nil {
 		return Worker{}, err
 	}
+	composeHarborInsecure, err := boolEnv("COMPOSE_HARBOR_INSECURE", false)
+	if err != nil {
+		return Worker{}, err
+	}
 	stagingHelperImage := stringEnv("STAGING_HELPER_IMAGE", "m.daocloud.io/docker.io/library/busybox@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
 	if !strings.Contains(stagingHelperImage, "@sha256:") {
 		return Worker{}, errors.New("STAGING_HELPER_IMAGE must be pinned by sha256 digest")
@@ -199,23 +206,26 @@ func LoadWorker() (Worker, error) {
 	}
 
 	return Worker{
-		Environment:              stringEnv("APP_ENV", defaultEnvironment),
-		Version:                  stringEnv("APP_VERSION", defaultVersion),
-		LogLevel:                 level,
-		HeartbeatInterval:        heartbeat,
-		PollInterval:             poll,
-		LeaseDuration:            lease,
-		RetryDelay:               retry,
-		Database:                 databaseConfig(),
-		CredentialMasterKeyFile:  stringEnv("CREDENTIAL_MASTER_KEY_FILE", "/run/secrets/sks-migration/master-key"),
-		CredentialKeyVersion:     keyVersion,
-		StagingHelperImage:       stagingHelperImage,
-		KomposeImage:             komposeImage,
-		KopiaImage:               kopiaImage,
-		MetricsAddr:              stringEnv("WORKER_METRICS_ADDR", ":9090"),
-		ComposeImageRepository:   stringEnv("COMPOSE_IMAGE_REPOSITORY", ""),
-		RegistryDockerConfigFile: stringEnv("REGISTRY_DOCKER_CONFIG_FILE", ""),
-		RegistryPullSecretName:   stringEnv("REGISTRY_PULL_SECRET_NAME", "sks-migration-registry"),
+		Environment:                stringEnv("APP_ENV", defaultEnvironment),
+		Version:                    stringEnv("APP_VERSION", defaultVersion),
+		LogLevel:                   level,
+		HeartbeatInterval:          heartbeat,
+		PollInterval:               poll,
+		LeaseDuration:              lease,
+		RetryDelay:                 retry,
+		Database:                   databaseConfig(),
+		CredentialMasterKeyFile:    stringEnv("CREDENTIAL_MASTER_KEY_FILE", "/run/secrets/sks-migration/master-key"),
+		CredentialKeyVersion:       keyVersion,
+		StagingHelperImage:         stagingHelperImage,
+		KomposeImage:               komposeImage,
+		KopiaImage:                 kopiaImage,
+		MetricsAddr:                stringEnv("WORKER_METRICS_ADDR", ":9090"),
+		ComposeImageRepository:     stringEnv("COMPOSE_IMAGE_REPOSITORY", ""),
+		ComposeHarborEndpoint:      stringEnv("COMPOSE_HARBOR_ENDPOINT", ""),
+		ComposeHarborProjectPrefix: stringEnv("COMPOSE_HARBOR_PROJECT_PREFIX", "sks-compose"),
+		ComposeHarborInsecure:      composeHarborInsecure,
+		RegistryDockerConfigFile:   stringEnv("REGISTRY_DOCKER_CONFIG_FILE", ""),
+		RegistryPullSecretName:     stringEnv("REGISTRY_PULL_SECRET_NAME", "sks-migration-registry"),
 	}, nil
 }
 

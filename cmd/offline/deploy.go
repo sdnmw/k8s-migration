@@ -199,7 +199,7 @@ func deployBundle(args []string, output io.Writer) error {
 			return fmt.Errorf("prepare default MinIO: %w", err)
 		}
 	}
-	values, err := deploymentValues(retargeted, harborURL.Host, options.harborProject, options.storageClass, options.cookieSecure)
+	values, err := deploymentValues(retargeted, harborURL.Host, harborURL.String(), options.harborProject, options.storageClass, options.cookieSecure, options.insecureRegistry)
 	if err != nil {
 		return err
 	}
@@ -448,7 +448,7 @@ func discoverSmartXStorageClass(ctx context.Context, clientset kubernetesclient.
 	return candidates[0].name, nil
 }
 
-func deploymentValues(lock offline.ImageLock, registry, project, storageClass string, cookieSecure bool) (map[string]any, error) {
+func deploymentValues(lock offline.ImageLock, registry, harborEndpoint, project, storageClass string, cookieSecure, harborInsecure bool) (map[string]any, error) {
 	images := make(map[string]offline.LockedImage, len(lock.Images))
 	for _, image := range lock.Images {
 		images[image.Name] = image
@@ -474,10 +474,13 @@ func deploymentValues(lock offline.ImageLock, registry, project, storageClass st
 	}
 	return map[string]any{
 		"global": map[string]any{
-			"storageClass":           storageClass,
-			"imagePullSecrets":       []any{map[string]any{"name": platformRegistrySecret}},
-			"composeImageRepository": registry + "/" + project + "/compose-migrations",
-			"registryPullSecretName": platformRegistrySecret,
+			"storageClass":               storageClass,
+			"imagePullSecrets":           []any{map[string]any{"name": platformRegistrySecret}},
+			"composeImageRepository":     registry + "/" + project + "/compose-migrations",
+			"composeHarborEndpoint":      harborEndpoint,
+			"composeHarborProjectPrefix": project + "-compose",
+			"composeHarborInsecure":      harborInsecure,
+			"registryPullSecretName":     platformRegistrySecret,
 		},
 		"image": map[string]any{"api": resolved["platform-api"], "worker": resolved["platform-worker"], "web": resolved["platform-web"], "postgres": resolved["postgresql"], "pullPolicy": "IfNotPresent"},
 		"addonImages": map[string]any{

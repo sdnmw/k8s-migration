@@ -46,6 +46,19 @@ func TestComposeImagePublishCommandUsesExistingContainerImage(t *testing.T) {
 	}
 }
 
+func TestComposeImagePublishCommandCanPullPublicImageWhenNoContainerExists(t *testing.T) {
+	command, _, err := composeImagePublishCommand(ComposeImagePublishSpec{
+		RunID: "run-1", ProjectName: "shop", Services: []string{"db"}, SourceImages: map[string]string{"db": "postgres:18"},
+		Repository: "harbor.example.local/sks-compose-shop", Registry: RegistryCredential{Username: "robot", Password: "secret"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(command, "docker pull 'postgres:18'") || !strings.Contains(command, "docker image inspect --format '{{.Id}}' 'postgres:18'") {
+		t.Fatalf("public image fallback is missing: %s", command)
+	}
+}
+
 func TestRegistryCredentialFromDockerConfig(t *testing.T) {
 	credential, err := RegistryCredentialFromDockerConfig([]byte(`{"auths":{"harbor.local":{"auth":"cm9ib3Q6c2VjcmV0"}}}`), "harbor.local/migrations/compose")
 	if err != nil || credential.Username != "robot" || credential.Password != "secret" {

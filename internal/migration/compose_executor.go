@@ -50,6 +50,10 @@ type ComposeImagePublisher interface {
 	PublishComposeImages(context.Context, string, sshadapter.Credential, sshadapter.ComposeImagePublishSpec) (map[string]string, error)
 }
 
+type ComposeRegistryProjectManager interface {
+	EnsurePublicProject(context.Context, string) (string, error)
+}
+
 type ComposeTransformEngine interface {
 	Transform([]byte, domainmapping.Profile) (transform.Result, error)
 	Render(transform.Result) ([]byte, error)
@@ -71,6 +75,8 @@ type ComposeExecutor struct {
 	platform               repository.PlatformRepository
 	sourceMover            ComposeSourceMover
 	imagePublisher         ComposeImagePublisher
+	registryProjectManager ComposeRegistryProjectManager
+	mirrorAllImages        bool
 	imageRepository        string
 	registryCredential     sshadapter.RegistryCredential
 	registryDockerConfig   []byte
@@ -100,6 +106,17 @@ func WithComposeBuildImagePublishing(publisher ComposeImagePublisher, repository
 		executor.registryCredential = credential
 		executor.registryDockerConfig = append([]byte(nil), configCopy...)
 		executor.registryPullSecretName = strings.TrimSpace(pullSecretName)
+		return nil
+	}
+}
+
+func WithComposeRegistryProjectManager(manager ComposeRegistryProjectManager) ComposeExecutorOption {
+	return func(executor *ComposeExecutor) error {
+		if manager == nil {
+			return errors.New("Compose registry project manager is required")
+		}
+		executor.registryProjectManager = manager
+		executor.mirrorAllImages = true
 		return nil
 	}
 }
@@ -240,15 +257,33 @@ func (e *ComposeExecutor) preflight(ctx context.Context, runID uuid.UUID) error 
 		return err
 	}
 	defer resolved.clear()
-	missing := make([]string, 0)
+	servicesToPublish := make([]string, 0)
+	sourceImages := make(map[string]string)
 	for _, service := range resolved.application.Inventory.Compose.Services {
-		if strings.TrimSpace(service.Image) == "" && strings.TrimSpace(resolved.publishedImages[service.Name]) == "" {
-			missing = append(missing, service.Name)
+		sourceImages[service.Name] = strings.TrimSpace(service.Image)
+		if strings.TrimSpace(resolved.publishedImages[service.Name]) != "" {
+			continue
+		}
+		if e.mirrorAllImages || strings.TrimSpace(service.Image) == "" {
+			servicesToPublish = append(servicesToPublish, service.Name)
 		}
 	}
-	if len(missing) > 0 {
+	if len(servicesToPublish) > 0 {
 		if e.imagePublisher == nil {
-			return fmt.Errorf("Compose services %s use local build images; configure the migration Harbor publisher or add pullable images", strings.Join(missing, ", "))
+			return fmt.Errorf("Compose services %s require migration Harbor image publishing", strings.Join(servicesToPublish, ", "))
+		}
+		repository := e.imageRepository
+		if e.registryProjectManager != nil {
+			var projectErr error
+			repository, projectErr = e.registryProjectManager.EnsurePublicProject(ctx, resolved.application.Inventory.Compose.ProjectName)
+			if projectErr != nil {
+				if strings.TrimSpace(repository) == "" {
+					return fmt.Errorf("prepare application Harbor project before migration: %w", projectErr)
+				}
+				if err := e.progress.AppendEvent(ctx, domainmigration.Event{RunID: runID, Type: "COMPOSE_HARBOR_PROJECT_FALLBACK", Severity: domainmigration.EventWarning, Message: fmt.Sprintf("Could not create the application Harbor project; using %s", repository), Detail: map[string]any{"repository": repository, "reason": projectErr.Error()}}); err != nil {
+					return err
+				}
+			}
 		}
 		credential, err := e.resolveSSHCredential(ctx, resolved.source)
 		if err != nil {
@@ -256,12 +291,21 @@ func (e *ComposeExecutor) preflight(ctx context.Context, runID uuid.UUID) error 
 		}
 		images, err := e.imagePublisher.PublishComposeImages(ctx, resolved.source.Endpoint, credential, sshadapter.ComposeImagePublishSpec{
 			RunID: runID.String(), ProjectName: resolved.application.Inventory.Compose.ProjectName,
-			Services: missing, Repository: e.imageRepository, Registry: e.registryCredential,
+			Services: servicesToPublish, SourceImages: sourceImages, Repository: repository, Registry: e.registryCredential,
 		})
 		if err != nil {
-			return fmt.Errorf("publish local Compose images to migration Harbor: %w", err)
+			return fmt.Errorf("mirror Compose images to migration Harbor: %w", err)
 		}
-		if err := e.progress.AppendEvent(ctx, domainmigration.Event{RunID: runID, Type: "COMPOSE_BUILD_IMAGES_PUBLISHED", Severity: domainmigration.EventInfo, Message: fmt.Sprintf("Published %d local Compose images to the migration Harbor", len(images)), Detail: map[string]any{"images": images, "services": missing}}); err != nil {
+		for name, image := range resolved.publishedImages {
+			images[name] = image
+		}
+		eventType := "COMPOSE_BUILD_IMAGES_PUBLISHED"
+		message := fmt.Sprintf("Published %d local Compose images to the migration Harbor", len(servicesToPublish))
+		if e.mirrorAllImages {
+			eventType = "COMPOSE_IMAGES_MIRRORED"
+			message = fmt.Sprintf("Mirrored %d Compose service images to %s", len(servicesToPublish), repository)
+		}
+		if err := e.progress.AppendEvent(ctx, domainmigration.Event{RunID: runID, Type: eventType, Severity: domainmigration.EventInfo, Message: message, Detail: map[string]any{"images": images, "services": servicesToPublish, "repository": repository}}); err != nil {
 			return err
 		}
 		resolved.publishedImages = images
@@ -679,7 +723,7 @@ func (e *ComposeExecutor) publishedComposeImages(ctx context.Context, runID uuid
 		return nil, err
 	}
 	for index := len(events) - 1; index >= 0; index-- {
-		if events[index].Type != "COMPOSE_BUILD_IMAGES_PUBLISHED" {
+		if events[index].Type != "COMPOSE_IMAGES_MIRRORED" && events[index].Type != "COMPOSE_BUILD_IMAGES_PUBLISHED" {
 			continue
 		}
 		result := map[string]string{}
@@ -715,10 +759,12 @@ func composeYAMLWithPublishedImages(contents []byte, images map[string]string) (
 		if !found || !valid || strings.TrimSpace(image) == "" {
 			return nil, fmt.Errorf("published image for Compose service %s cannot be applied", name)
 		}
-		buildContext := composeBuildContext(service["build"])
-		service["volumes"] = composeTargetVolumes(service["volumes"], buildContext)
+		if _, hasBuild := service["build"]; hasBuild {
+			buildContext := composeBuildContext(service["build"])
+			service["volumes"] = composeTargetVolumes(service["volumes"], buildContext)
+			delete(service, "build")
+		}
 		service["image"] = image
-		delete(service, "build")
 	}
 	result, err := yaml.Marshal(root)
 	if err != nil {

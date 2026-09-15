@@ -29,6 +29,9 @@ data:
   KOPIA_IMAGE: {{ include "migration.image" .Values.addonImages.kopia | quote }}
   {{- if .Values.global.composeImageRepository }}
   COMPOSE_IMAGE_REPOSITORY: {{ .Values.global.composeImageRepository | quote }}
+  COMPOSE_HARBOR_ENDPOINT: {{ .Values.global.composeHarborEndpoint | quote }}
+  COMPOSE_HARBOR_PROJECT_PREFIX: {{ .Values.global.composeHarborProjectPrefix | quote }}
+  COMPOSE_HARBOR_INSECURE: {{ .Values.global.composeHarborInsecure | quote }}
   REGISTRY_DOCKER_CONFIG_FILE: "/run/secrets/sks-migration-registry/.dockerconfigjson"
   REGISTRY_PULL_SECRET_NAME: {{ .Values.global.registryPullSecretName | quote }}
   {{- end }}

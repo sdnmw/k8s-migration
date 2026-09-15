@@ -91,7 +91,7 @@ func TestDeploymentValuesUseRetargetedHarborImages(t *testing.T) {
 	for _, name := range names {
 		lock.Images = append(lock.Images, offline.LockedImage{Name: name, Source: "official/" + name + "@sha256:" + strings.Repeat("a", 64), Target: "customer/" + name + ":v1"})
 	}
-	values, err := deploymentValues(lock, "harbor.test", "customer", "smtx-block", false)
+	values, err := deploymentValues(lock, "harbor.test", "https://harbor.test", "customer", "smtx-block", false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

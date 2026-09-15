@@ -86,11 +86,12 @@ type RegistryCredential struct {
 }
 
 type ComposeImagePublishSpec struct {
-	RunID       string
-	ProjectName string
-	Services    []string
-	Repository  string
-	Registry    RegistryCredential
+	RunID        string
+	ProjectName  string
+	Services     []string
+	SourceImages map[string]string
+	Repository   string
+	Registry     RegistryCredential
 }
 
 func RegistryCredentialFromDockerConfig(contents []byte, repository string) (RegistryCredential, error) {
@@ -171,6 +172,7 @@ func (c *Client) DiscoverComposeProjects(ctx context.Context, endpoint string, c
 		}
 	}
 	projects := make([]ComposeProject, 0, len(rows))
+	failedProjects := make([]string, 0)
 	for _, row := range rows {
 		if !safeDockerName.MatchString(row.Name) {
 			continue
@@ -205,7 +207,8 @@ func (c *Client) DiscoverComposeProjects(ctx context.Context, endpoint string, c
 			}
 		}
 		if configErr != nil {
-			return projects, fmt.Errorf("读取 Compose 项目 %s 配置失败，请检查配置文件及引用文件是否存在：%w", row.Name, configErr)
+			failedProjects = append(failedProjects, row.Name)
+			continue
 		}
 		projects = append(projects, ComposeProject{
 			Name: row.Name, Status: row.Status, ConfigFiles: files,
@@ -213,6 +216,9 @@ func (c *Client) DiscoverComposeProjects(ctx context.Context, endpoint string, c
 		})
 	}
 	sort.Slice(projects, func(i, j int) bool { return projects[i].Name < projects[j].Name })
+	if len(projects) == 0 && len(failedProjects) > 0 {
+		return nil, fmt.Errorf("读取 Compose 项目配置失败，请检查配置文件及引用文件权限：%s", strings.Join(failedProjects, ", "))
+	}
 	return projects, nil
 }
 
@@ -334,10 +340,21 @@ func composeImagePublishCommand(spec ComposeImagePublishSpec) (string, map[strin
 		images[service] = target
 		containerVar := fmt.Sprintf("c_%d", index)
 		imageVar := fmt.Sprintf("i_%d", index)
+		sourceImage := strings.TrimSpace(spec.SourceImages[service])
 		commands = append(commands,
 			containerVar+"=$(docker ps -aq --filter label=com.docker.compose.project="+shellQuote(spec.ProjectName)+" --filter label=com.docker.compose.service="+shellQuote(service)+" | head -n 1)",
-			"test -n \"$"+containerVar+"\" || { printf %s "+shellQuote("Compose service "+service+" has no existing container image; start or build it on the source host first\\n")+" >&2; exit 1; }",
-			imageVar+"=$(docker inspect --format '{{.Image}}' \"$"+containerVar+"\")",
+		)
+		if sourceImage == "" {
+			commands = append(commands,
+				"test -n \"$"+containerVar+"\" || { printf %s "+shellQuote("Compose service "+service+" has no existing container image; start or build it on the source host first\\n")+" >&2; exit 1; }",
+				imageVar+"=$(docker inspect --format '{{.Image}}' \"$"+containerVar+"\")",
+			)
+		} else {
+			commands = append(commands,
+				"if test -n \"$"+containerVar+"\"; then "+imageVar+"=$(docker inspect --format '{{.Image}}' \"$"+containerVar+"\"); else docker image inspect "+shellQuote(sourceImage)+" >/dev/null 2>&1 || docker pull "+shellQuote(sourceImage)+" >/dev/null; "+imageVar+"=$(docker image inspect --format '{{.Id}}' "+shellQuote(sourceImage)+"); fi",
+			)
+		}
+		commands = append(commands,
 			"test -n \"$"+imageVar+"\"",
 			"docker tag \"$"+imageVar+"\" "+shellQuote(target),
 			"docker --config \"$d\" push "+shellQuote(target)+" >/dev/null",

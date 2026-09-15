@@ -177,7 +177,10 @@ func applicationDiscoveryDetail(err error) string {
 		return "Compose 项目存在，但当前 SSH 用户没有读取配置或引用文件的权限。请检查 compose 文件及 env_file 的访问权限，或更换有权限的 SSH 凭证后重新发现。"
 	}
 	if strings.Contains(message, "env_file") || strings.Contains(message, "label_file") || strings.Contains(message, "server-local file") {
-		return "Compose 引用了其他配置文件。单独上传 docker-compose.yml 不包含这些文件；请在源环境点击发现应用，让系统从主机读取完整配置。"
+		return "Compose 引用了主机上的其他配置文件。请使用“从 Compose 主机发现应用”，系统会在源主机解析 include、env_file 和覆盖文件；单独上传 compose.yaml 仅适用于自包含配置。"
+	}
+	if strings.Contains(message, "Compose 项目解析失败") {
+		return "主机上的 Compose 项目已找到，但没有项目能形成有效 Inventory。请检查项目配置及引用文件；单个异常项目不会再阻止其他正常项目被发现。"
 	}
 	if strings.Contains(message, "YAML cannot be parsed") {
 		return "Compose 文件不是有效 YAML，请检查文件内容和缩进；请上传文件本身，不要上传路径文本或终端输出。"

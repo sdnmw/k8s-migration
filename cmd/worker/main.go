@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/google/uuid"
+	harboradapter "github.com/smartx/sks-migration-center/internal/adapter/harbor"
 	kubernetesadapter "github.com/smartx/sks-migration-center/internal/adapter/kubernetes"
 	sshadapter "github.com/smartx/sks-migration-center/internal/adapter/ssh"
 	veleroadapter "github.com/smartx/sks-migration-center/internal/adapter/velero"
@@ -101,6 +103,15 @@ func main() {
 			os.Exit(1)
 		}
 		composeOptions = append(composeOptions, migrationservice.WithComposeBuildImagePublishing(sshClient, cfg.ComposeImageRepository, registryCredential, dockerConfig, cfg.RegistryPullSecretName))
+		if cfg.ComposeHarborEndpoint != "" {
+			registryHost := strings.SplitN(cfg.ComposeImageRepository, "/", 2)[0]
+			harborClient, harborErr := harboradapter.NewClient(cfg.ComposeHarborEndpoint, registryHost, cfg.ComposeHarborProjectPrefix, registryCredential.Username, registryCredential.Password, cfg.ComposeHarborInsecure)
+			if harborErr != nil {
+				logger.Error("initialize Compose Harbor project manager", "error", harborErr)
+				os.Exit(1)
+			}
+			composeOptions = append(composeOptions, migrationservice.WithComposeRegistryProjectManager(harborClient))
+		}
 		for index := range dockerConfig {
 			dockerConfig[index] = 0
 		}

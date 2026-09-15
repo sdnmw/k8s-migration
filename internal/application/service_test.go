@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	sshadapter "github.com/smartx/sks-migration-center/internal/adapter/ssh"
 	composeanalyzer "github.com/smartx/sks-migration-center/internal/compose"
 	domainapplication "github.com/smartx/sks-migration-center/internal/domain/application"
 	domaincredential "github.com/smartx/sks-migration-center/internal/domain/credential"
@@ -70,6 +71,14 @@ type inventoryClient struct {
 	namespace  string
 	inventory  domainapplication.Inventory
 	err        error
+}
+
+type composeHostStub struct {
+	projects []sshadapter.ComposeProject
+}
+
+func (s *composeHostStub) DiscoverComposeProjects(context.Context, string, sshadapter.Credential) ([]sshadapter.ComposeProject, error) {
+	return s.projects, nil
 }
 
 func (c *inventoryClient) DiscoverNamespace(_ context.Context, credential []byte, namespace string) (domainapplication.Inventory, error) {
@@ -149,6 +158,31 @@ func TestRegisterComposePersistsInventoryAndKeepsDefinitionOutOfResponse(t *test
 	var storedDefinition domainapplication.ComposeDefinition
 	if err := json.Unmarshal(credentials.stored, &storedDefinition); err != nil || !strings.Contains(string(storedDefinition.EnvironmentFile), "must-not-leak") {
 		t.Fatal("stored Compose definition is incomplete")
+	}
+}
+
+func TestDiscoverComposeKeepsHealthyProjectsWhenAnotherProjectIsInvalid(t *testing.T) {
+	environmentID, sshCredentialID := uuid.New(), uuid.New()
+	environments := &environmentStore{value: domainenvironment.Environment{
+		ID: environmentID, Role: domainenvironment.RoleSource, Kind: domainenvironment.KindDockerCompose,
+		Status: domainenvironment.StatusConnected, CredentialID: &sshCredentialID, Endpoint: "ssh://compose:22",
+	}}
+	sshCredential, _ := json.Marshal(sshadapter.Credential{Username: "migration", HostKeyFingerprint: "SHA256:test", PrivateKey: "key"})
+	credentials := &vault{value: sshCredential}
+	service, err := NewService(environments, &applicationStore{}, credentials, &inventoryClient{}, composeanalyzer.NewAnalyzer())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.WithComposeHost(&composeHostStub{projects: []sshadapter.ComposeProject{
+		{Name: "broken", ComposeYAML: []byte("include: [missing.yaml]\nservices: {}\n")},
+		{Name: "shop", Status: "running(1)", WorkingDir: "/srv/shop", ConfigFiles: []string{"/srv/shop/compose.yaml"}, ComposeYAML: []byte("services:\n  web:\n    image: nginx:1.27\n")},
+	}})
+	values, err := service.DiscoverCompose(context.Background(), environmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 1 || values[0].Name != "shop" || values[0].Inventory.Compose.WorkingDir != "/srv/shop" {
+		t.Fatalf("healthy Compose project was not retained: %+v", values)
 	}
 }
 
