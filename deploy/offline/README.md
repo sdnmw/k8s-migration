@@ -77,7 +77,7 @@ offline import --directory ./bundle \
 
 校验以 `bundle-manifest.json` 为权威清单：所有登记文件必须存在且大小、SHA-256 完全一致，镜像 OCI descriptor 仍逐项校验。为便于一次性部署，解压目录可以额外放置 kubeconfig、凭据文件或下载时保留的原始归档；额外文件既不会被信任，也不会导致已登记物料被误判为篡改。
 
-脚本依次校验离线包、创建或复用 Harbor 项目、导入所有 digest 固定镜像、自动发现 SmartX ELF CSI StorageClass、生成平台凭据、创建 Kubernetes imagePullSecret 和平台 Secret、部署或无损复用默认单实例 MinIO、首次安装时自动登记目标 SKS 与默认对象存储 Profile，再通过内置 Helm Go SDK 安装或升级平台。升级会保留已有对象存储登记，且不依赖可能已经修改过的管理员密码；如升级前删除过默认登记，可在对象存储页重新采用已有 MinIO。完成后输出首次管理员密码、平台 NodePort URL 和默认 MinIO S3 Endpoint。默认 MinIO PVC 为 `100Gi`，可用 `--minio-storage-size` 调整；明确只使用客户现有 S3 时可传 `--skip-default-minio`。实验室自签名 Harbor 可显式添加 `--insecure-registry`；通过 HTTPS 代理暴露界面时添加 `--cookie-secure`。需要固定既有凭据或指定非默认存储类时，可选传入 `--admin-password-file`、`--master-key-file` 和 `--storage-class`。
+脚本依次校验离线包、创建或复用 Harbor 项目、导入所有 digest 固定镜像、自动发现 SmartX ELF CSI StorageClass、生成平台凭据、创建 Kubernetes imagePullSecret 和平台 Secret、部署或无损复用默认单实例 MinIO、首次安装时自动登记目标 SKS 与默认对象存储 Profile，再通过内置 Helm Go SDK 安装或升级平台。首次安装未传 `--admin-password-file` 时，管理员 `admin` 默认密码为 `SmartX@123456`；正式使用前建议在右上角账户菜单修改。升级会保留已有对象存储登记；如升级前删除过默认登记且管理员密码已修改，使用 `--admin-password-file` 提供当前密码即可重新采用已有 MinIO，脚本不会再静默忽略登记失败。完成后输出平台管理员密码、NodePort URL 和默认 MinIO S3 Endpoint。默认 MinIO PVC 为 `100Gi`，可用 `--minio-storage-size` 调整；明确只使用客户现有 S3 时可传 `--skip-default-minio`。实验室自签名 Harbor 可显式添加 `--insecure-registry`；通过 HTTPS 代理暴露界面时添加 `--cookie-secure`。需要覆盖默认凭据或指定非默认存储类时，可选传入 `--admin-password-file`、`--master-key-file` 和 `--storage-class`。
 
 对象存储页面默认显示一键部署登记的 MinIO。管理员还可以通过“新增 MinIO”创建额外实例，或通过“对接其他 S3”录入兼容 S3 API 的外部对象存储；外部凭据在读写校验通过后加密保存且不会由 API 回显。
 

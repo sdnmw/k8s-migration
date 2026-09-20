@@ -60,6 +60,9 @@ type BackupStorageLocationStatus struct {
 	Name               string    `json:"name"`
 	Phase              string    `json:"phase"`
 	Message            string    `json:"message,omitempty"`
+	Bucket             string    `json:"bucket,omitempty"`
+	Prefix             string    `json:"prefix,omitempty"`
+	Endpoint           string    `json:"endpoint,omitempty"`
 	LastValidationTime time.Time `json:"lastValidationTime,omitempty"`
 }
 
@@ -572,7 +575,12 @@ func sameRestoreIdentity(value *unstructured.Unstructured, spec RestoreSpec) boo
 }
 
 func locationStatus(value *unstructured.Unstructured) BackupStorageLocationStatus {
-	status := BackupStorageLocationStatus{Name: value.GetName(), Phase: nestedString(value.Object, "status", "phase"), Message: nestedString(value.Object, "status", "message")}
+	status := BackupStorageLocationStatus{
+		Name: value.GetName(), Phase: nestedString(value.Object, "status", "phase"), Message: nestedString(value.Object, "status", "message"),
+		Bucket:   nestedString(value.Object, "spec", "objectStorage", "bucket"),
+		Prefix:   strings.Trim(nestedString(value.Object, "spec", "objectStorage", "prefix"), "/"),
+		Endpoint: strings.TrimRight(nestedString(value.Object, "spec", "config", "s3Url"), "/"),
+	}
 	status.LastValidationTime = nestedTime(value.Object, "status", "lastValidationTime")
 	return status
 }

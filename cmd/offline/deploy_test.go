@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -61,7 +62,7 @@ func TestApplicationSecretIsGeneratedForFreshInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(password) < 24 || string(writer.data["admin-password"]) != password || len(writer.data["postgres-password"]) < 32 {
+	if password != defaultAdminPassword || string(writer.data["admin-password"]) != defaultAdminPassword || len(writer.data["postgres-password"]) < 32 {
 		t.Fatal("generated platform credentials are incomplete")
 	}
 	key, err := base64.StdEncoding.DecodeString(string(writer.data["master-key"]))
@@ -155,5 +156,57 @@ func TestPlatformLoginAcceptsNoContentWithSessionCookies(t *testing.T) {
 	session, csrf, err := platformLogin(context.Background(), server.Client(), server.URL, "password")
 	if err != nil || session == nil || csrf == nil || session.Value != "session" || csrf.Value != "csrf" {
 		t.Fatalf("204 login result session=%v csrf=%v err=%v", session, csrf, err)
+	}
+}
+
+func TestDefaultObjectStorageConnectsFreshTargetBeforeAdoption(t *testing.T) {
+	var mutex sync.Mutex
+	var calls []string
+	connected := false
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		mutex.Lock()
+		calls = append(calls, request.Method+" "+request.URL.Path)
+		mutex.Unlock()
+		switch request.URL.Path {
+		case "/api/v1/auth/login":
+			http.SetCookie(response, &http.Cookie{Name: "sks_migration_session", Value: "session", Path: "/"})
+			http.SetCookie(response, &http.Cookie{Name: "sks_migration_csrf", Value: "csrf", Path: "/"})
+			response.WriteHeader(http.StatusNoContent)
+		case "/api/v1/environments":
+			if request.Method == http.MethodGet {
+				_, _ = response.Write([]byte("[]"))
+				return
+			}
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = response.Write([]byte(`{"id":"68a83b73-b470-45cf-a412-c95024720f19"}`))
+		case "/api/v1/environments/68a83b73-b470-45cf-a412-c95024720f19/test":
+			connected = true
+			response.Header().Set("Content-Type", "application/json")
+			_, _ = response.Write([]byte(`{"success":true,"checks":[]}`))
+		case "/api/v1/object-storage/minio/adopt":
+			if !connected {
+				http.Error(response, "target was not connected", http.StatusBadRequest)
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	err := registerDefaultObjectStorage(context.Background(), server.URL, "password", []byte("kubeconfig"), "https://192.0.2.10:30900")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"POST /api/v1/auth/login",
+		"GET /api/v1/environments",
+		"POST /api/v1/environments",
+		"POST /api/v1/environments/68a83b73-b470-45cf-a412-c95024720f19/test",
+		"POST /api/v1/object-storage/minio/adopt",
+	}
+	if strings.Join(calls, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("unexpected platform registration sequence:\n%s", strings.Join(calls, "\n"))
 	}
 }

@@ -34,6 +34,7 @@ const (
 	platformAPIDeployment     = "sks-migration-center-api"
 	platformRegistrySecret    = "sks-migration-registry"
 	platformApplicationSecret = "sks-migration-center-secrets"
+	defaultAdminPassword      = "SmartX@123456"
 )
 
 type deployOptions struct {
@@ -78,7 +79,7 @@ func deployBundle(args []string, output io.Writer) error {
 	flags.StringVar(&options.usernameFile, "harbor-username-file", "", "Harbor username file")
 	flags.StringVar(&options.passwordFile, "harbor-password-file", "", "Harbor password file")
 	flags.StringVar(&options.kubeconfigFile, "sks-kubeconfig", "", "target SKS workload-cluster kubeconfig")
-	flags.StringVar(&options.adminPasswordFile, "admin-password-file", "", "optional platform administrator password file; generated when omitted")
+	flags.StringVar(&options.adminPasswordFile, "admin-password-file", "", "optional platform administrator password file; defaults to SmartX@123456 on a fresh install")
 	flags.StringVar(&options.masterKeyFile, "master-key-file", "", "optional base64-encoded 32-byte credential master key file; generated when omitted")
 	flags.StringVar(&options.storageClass, "storage-class", "", "optional target RWO StorageClass; SmartX ELF CSI is discovered when omitted")
 	flags.StringVar(&options.minioStorageSize, "minio-storage-size", "100Gi", "default MinIO RWO PVC size")
@@ -216,17 +217,29 @@ func deployBundle(args []string, output io.Writer) error {
 	}
 	defaultMinIORegistered := false
 	if defaultMinIO.Endpoint != "" {
-		applicationSecret, err := clientset.CoreV1().Secrets(options.namespace).Get(ctx, platformApplicationSecret, metav1.GetOptions{})
-		if err != nil || len(applicationSecret.Data["admin-password"]) == 0 {
-			return errors.New("read platform administrator password for default MinIO registration")
+		registrationPassword := adminPassword
+		if registrationPassword == "" {
+			applicationSecret, err := clientset.CoreV1().Secrets(options.namespace).Get(ctx, platformApplicationSecret, metav1.GetOptions{})
+			if err != nil || len(applicationSecret.Data["admin-password"]) == 0 {
+				return errors.New("read platform administrator password for default MinIO registration")
+			}
+			registrationPassword = string(applicationSecret.Data["admin-password"])
 		}
-		if err := registerDefaultObjectStorage(ctx, urls[0], string(applicationSecret.Data["admin-password"]), kubeconfig, defaultMinIO.Endpoint); err != nil {
+		if err := registerDefaultObjectStorage(ctx, urls[0], registrationPassword, kubeconfig, defaultMinIO.Endpoint); err != nil {
 			// An administrator may have changed the password after the first
 			// installation. Do not make a normal upgrade depend on the stale
-			// bootstrap value retained in the Kubernetes Secret. A fresh install
-			// must still fail closed so it cannot finish without object storage.
+			// bootstrap value retained in the Kubernetes Secret. Emit an explicit
+			// warning so an operator can rerun with --admin-password-file. A fresh
+			// install must still fail closed so it cannot finish without storage.
 			if !platformAlreadyInstalled {
 				return err
+			}
+			if encodeErr := encoder.Encode(map[string]any{
+				"stage":   "warning",
+				"message": "default MinIO was not registered; if the administrator password changed, rerun with --admin-password-file",
+				"error":   err.Error(),
+			}); encodeErr != nil {
+				return encodeErr
 			}
 		} else {
 			defaultMinIORegistered = true
@@ -369,10 +382,7 @@ func ensureApplicationSecret(ctx context.Context, cluster platformSecretWriter, 
 	}
 	generatedAdminPassword := ""
 	if adminPassword == "" {
-		adminPassword, err = randomURLSecret(24)
-		if err != nil {
-			return "", err
-		}
+		adminPassword = defaultAdminPassword
 		generatedAdminPassword = adminPassword
 	}
 	if masterKey == "" {

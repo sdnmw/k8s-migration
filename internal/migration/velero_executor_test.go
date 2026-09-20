@@ -93,6 +93,18 @@ func TestVeleroExecutorStopsOnFailedBackup(t *testing.T) {
 	}
 }
 
+func TestVeleroExecutorPreflightRejectsDifferentBackupRepositoryPrefixes(t *testing.T) {
+	velero := &veleroExecutionStub{locations: map[string]veleroadapter.BackupStorageLocationStatus{
+		"source": {Phase: "Available", Endpoint: "https://minio.example:9000", Bucket: "velero", Prefix: "migrations/source"},
+		"target": {Phase: "Available", Endpoint: "https://minio.example:9000", Bucket: "velero", Prefix: "migrations/target"},
+	}}
+	executor, runID := veleroExecutorFixture(t, velero)
+	err := executor.Handle(context.Background(), domainmigration.Lease{RunID: runID, StepType: domainmigration.StepPreflight})
+	if err == nil || !strings.Contains(err.Error(), "same object storage repository") || !strings.Contains(err.Error(), "migrations/source") || !strings.Contains(err.Error(), "migrations/target") {
+		t.Fatalf("preflight error = %v", err)
+	}
+}
+
 func TestQuiesceWithoutPVCDoesNotRequireWorkloadScaling(t *testing.T) {
 	executor, runID := veleroExecutorFixture(t, &veleroExecutionStub{})
 	if err := executor.Handle(context.Background(), domainmigration.Lease{RunID: runID, StepType: domainmigration.StepQuiesce}); err != nil {
@@ -189,9 +201,13 @@ type veleroExecutionStub struct {
 	transfers     []veleroadapter.VolumeTransfer
 	backups       []veleroadapter.BackupSpec
 	restores      []veleroadapter.RestoreSpec
+	locations     map[string]veleroadapter.BackupStorageLocationStatus
 }
 
-func (s *veleroExecutionStub) BackupStorageLocationStatus(context.Context, []byte, string, string) (veleroadapter.BackupStorageLocationStatus, error) {
+func (s *veleroExecutionStub) BackupStorageLocationStatus(_ context.Context, kubeconfig []byte, _, _ string) (veleroadapter.BackupStorageLocationStatus, error) {
+	if value, ok := s.locations[string(kubeconfig)]; ok {
+		return value, nil
+	}
 	return veleroadapter.BackupStorageLocationStatus{Phase: "Available"}, nil
 }
 

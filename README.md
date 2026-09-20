@@ -84,7 +84,7 @@ chmod 0600 /secure/sks-migration/harbor-username \
 | `--minio-storage-size <size>` | 设置默认 MinIO PVC 容量，默认 `100Gi` |
 | `--skip-default-minio` | 不部署默认 MinIO，安装后在界面中对接其他 S3 |
 | `--namespace <name>` | 修改平台 Namespace，默认 `sks-migration-center` |
-| `--admin-password-file <file>` | 使用指定的管理员初始密码；省略时自动生成 |
+| `--admin-password-file <file>` | 覆盖管理员密码；首次安装省略时默认使用 `SmartX@123456`，升级且密码已修改时应提供当前密码以补登记默认对象存储 |
 | `--master-key-file <file>` | 使用指定的 32 字节 Base64 主密钥；省略时自动生成 |
 | `--cookie-secure` | 平台通过 HTTPS 暴露时为登录 Cookie 启用 Secure 属性 |
 | `--insecure-registry` | 仅在可信实验环境中允许 HTTP Harbor 或跳过 Harbor TLS 校验 |

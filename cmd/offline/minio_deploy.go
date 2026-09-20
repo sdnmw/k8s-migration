@@ -297,6 +297,15 @@ func registerDefaultObjectStorage(ctx context.Context, baseURL, adminPassword st
 		}
 		targetID = created.ID
 	}
+	var connection struct {
+		Success bool `json:"success"`
+	}
+	if err := platformJSON(ctx, client, http.MethodPost, baseURL+"/api/v1/environments/"+targetID+"/test", sessionCookie, csrfCookie, nil, &connection); err != nil {
+		return fmt.Errorf("test target SKS connection in platform: %w", err)
+	}
+	if !connection.Success {
+		return errors.New("test target SKS connection in platform: connection checks did not pass")
+	}
 	adopt := map[string]any{"environmentId": targetID, "name": "managed-minio", "endpoint": endpoint, "bucket": "velero", "region": "minio", "tlsSecretName": defaultMinIOTLSSecret}
 	if err := platformJSON(ctx, client, http.MethodPost, baseURL+"/api/v1/object-storage/minio/adopt", sessionCookie, csrfCookie, adopt, nil); err != nil {
 		return fmt.Errorf("register default MinIO in platform: %w", err)

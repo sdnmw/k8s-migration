@@ -61,6 +61,9 @@ func TestInstallUsesPinnedImagesAndWaitsForAvailableBSL(t *testing.T) {
 	if got := nestedValue(manager.request.Values, "nodeAgent", "podVolumePath"); got != "/var/lib/kubelet/pods" {
 		t.Fatalf("podVolumePath = %#v", got)
 	}
+	if _, found := manager.request.Values["namespace"]; found {
+		t.Fatal("namespace labels must be applied through client-go; chart labels create an offline kubectl hook")
+	}
 	if cluster.namespace != Namespace || !strings.Contains(string(cluster.secret[CredentialSecretKey]), "aws_access_key_id=access") || !strings.Contains(string(cluster.secret[CredentialSecretKey]), "aws_secret_access_key=secret") {
 		t.Fatalf("cluster preparation was incomplete")
 	}

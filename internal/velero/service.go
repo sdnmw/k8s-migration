@@ -314,9 +314,6 @@ func (s *Service) Install(ctx context.Context, input InstallInput) (InstallResul
 			"podVolumePath": input.KubeletRoot + "/pods", "pluginVolumePath": input.KubeletRoot + "/plugins",
 			"containerSecurityContext": map[string]any{"privileged": true},
 		},
-		"namespace": map[string]any{"labels": map[string]any{
-			"pod-security.kubernetes.io/enforce": "privileged", "pod-security.kubernetes.io/enforce-version": "latest",
-		}},
 	}
 	if _, err := s.manager.InstallOrUpgrade(ctx, append([]byte(nil), kubeconfig...), addon.InstallRequest{
 		ReleaseName: ReleaseName, Namespace: Namespace, ChartPath: OfficialChartArtifact, Version: OfficialChartVersion,

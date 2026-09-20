@@ -45,7 +45,7 @@ func TestEnsureLocationAndTrackBackupProgress(t *testing.T) {
 		Namespace: "velero", Name: "default", Provider: "aws", Bucket: "velero", Prefix: "sida",
 		Region: "minio", Endpoint: "https://192.0.2.10:30164", CredentialSecret: "cloud-credentials", CredentialKey: "cloud", CABundle: []byte("test-ca"), AccessMode: "ReadOnly",
 	})
-	if err != nil || location.Name != "default" {
+	if err != nil || location.Name != "default" || location.Bucket != "velero" || location.Prefix != "sida" || location.Endpoint != "https://192.0.2.10:30164" {
 		t.Fatalf("ensure location failed: %#v %v", location, err)
 	}
 	stored, err := dynamicClient.Resource(backupStorageLocations).Namespace("velero").Get(ctx, "default", metav1.GetOptions{})

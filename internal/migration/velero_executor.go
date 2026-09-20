@@ -128,6 +128,7 @@ func (e *VeleroExecutor) preflight(ctx context.Context, runID uuid.UUID) error {
 		return err
 	}
 	defer resolved.clear()
+	locations := make([]veleroadapter.BackupStorageLocationStatus, 0, 2)
 	for _, cluster := range []struct {
 		name       string
 		kubeconfig []byte
@@ -139,6 +140,10 @@ func (e *VeleroExecutor) preflight(ctx context.Context, runID uuid.UUID) error {
 		if status.Phase != "Available" {
 			return fmt.Errorf("%s Velero BackupStorageLocation is %s: %s", cluster.name, status.Phase, status.Message)
 		}
+		locations = append(locations, status)
+	}
+	if len(locations) == 2 && !sameBackupRepository(locations[0], locations[1]) {
+		return fmt.Errorf("source and target Velero BackupStorageLocations must use the same object storage repository: source=%s target=%s", backupRepositoryDescription(locations[0]), backupRepositoryDescription(locations[1]))
 	}
 	if resolved.plan.Strategy.VolumeMode == domainmigration.VolumeCSIDataMover {
 		if e.kubernetes == nil {
@@ -171,6 +176,26 @@ func (e *VeleroExecutor) preflight(ctx context.Context, runID uuid.UUID) error {
 		RunID: runID, Type: "EXECUTION_PREFLIGHT_PASSED", Severity: domainmigration.EventInfo,
 		Message: "Source and target Velero BackupStorageLocations are Available",
 	})
+}
+
+func sameBackupRepository(source, target veleroadapter.BackupStorageLocationStatus) bool {
+	// Older test doubles and third-party adapters may not expose repository
+	// metadata. The built-in adapter always does, so compare every populated
+	// field and fail before a migration can wait forever for an invisible backup.
+	if source.Bucket != "" && target.Bucket != "" && source.Bucket != target.Bucket {
+		return false
+	}
+	if source.Prefix != "" && target.Prefix != "" && strings.Trim(source.Prefix, "/") != strings.Trim(target.Prefix, "/") {
+		return false
+	}
+	if source.Endpoint != "" && target.Endpoint != "" && strings.TrimRight(source.Endpoint, "/") != strings.TrimRight(target.Endpoint, "/") {
+		return false
+	}
+	return true
+}
+
+func backupRepositoryDescription(value veleroadapter.BackupStorageLocationStatus) string {
+	return fmt.Sprintf("endpoint=%s bucket=%s prefix=%s", value.Endpoint, value.Bucket, value.Prefix)
 }
 
 type executionContext struct {
