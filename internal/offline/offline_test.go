@@ -96,6 +96,29 @@ func TestBundleIsReproducibleAndRejectsMismatchedOCIRoot(t *testing.T) {
 	}
 }
 
+func TestBundleRejectsMissingRequiredImageAndPlatformMismatch(t *testing.T) {
+	root, lock, _ := createBundleFixture(t)
+	components := []byte("apiVersion: migration.smartx.com/v1alpha1\nkind: OfflineComponentCatalog\nbundleVersion: test-v1\ncomponents:\n  - name: api\n    required: true\n  - name: worker\n    required: true\n")
+	if err := os.WriteFile(filepath.Join(root, "components.yaml"), components, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := PackDirectory(root, io.Discard); err == nil || !strings.Contains(err.Error(), "missing required image worker") {
+		t.Fatalf("missing image error = %v", err)
+	}
+	components = []byte("apiVersion: migration.smartx.com/v1alpha1\nkind: OfflineComponentCatalog\nbundleVersion: test-v1\ncomponents:\n  - name: api\n    required: true\n")
+	if err := os.WriteFile(filepath.Join(root, "components.yaml"), components, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lock.Images[0].Platforms = []string{"linux/arm64"}
+	value, _ := json.Marshal(lock)
+	if err := os.WriteFile(filepath.Join(root, ImageLockName), value, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := PackDirectory(root, io.Discard); err == nil || !strings.Contains(err.Error(), "actual image platforms [linux/amd64] do not match locked platforms [linux/arm64]") {
+		t.Fatalf("platform mismatch error = %v", err)
+	}
+}
+
 func TestRegistryImporterPushesVerifiedOCIImage(t *testing.T) {
 	root, lock, _ := createBundleFixture(t)
 	var mu sync.Mutex

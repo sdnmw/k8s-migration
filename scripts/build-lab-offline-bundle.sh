@@ -64,6 +64,18 @@ build_platform() {
   extract_layout "$oci_tar" "$name"
 }
 
+build_precompiled_platform() {
+  name=$1
+  dockerfile=$2
+  prebuilt_context=$3
+  oci_tar="$output_dir/$name.oci.tar"
+  docker buildx build --platform linux/amd64 \
+    --build-context "prebuilt=$prebuilt_context" \
+    -f "$root_dir/$dockerfile" \
+    --output "type=oci,dest=$oci_tar" "$root_dir"
+  extract_layout "$oci_tar" "$name"
+}
+
 export_platform_image() {
   name=$1
   source_image=$2
@@ -99,9 +111,28 @@ if [ -n "${PLATFORM_API_IMAGE:-}" ] || [ -n "${PLATFORM_WORKER_IMAGE:-}" ] || [ 
   export_platform_image worker "$PLATFORM_WORKER_IMAGE"
   export_platform_image web "$PLATFORM_WEB_IMAGE"
 else
-  build_platform api build/package/api.Dockerfile
-  build_platform worker build/package/worker.Dockerfile
-  build_platform web build/package/web.Dockerfile
+  case "$(uname -m)" in
+    x86_64|amd64)
+      build_platform api build/package/api.Dockerfile
+      build_platform worker build/package/worker.Dockerfile
+      build_platform web build/package/web.Dockerfile
+      ;;
+    *)
+      # Compiling Go under QEMU is both slow and prone to emulator faults on
+      # Apple Silicon. Cross-compile the static linux/amd64 binaries natively,
+      # build architecture-independent web assets natively, then use buildx
+      # only to assemble the pinned AMD64 runtime layers.
+      prebuilt_dir="$output_dir/prebuilt"
+      mkdir -p "$prebuilt_dir/api" "$prebuilt_dir/worker" "$prebuilt_dir/web/dist"
+      (cd "$root_dir" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$go_bin" build -trimpath -ldflags="-s -w" -o "$prebuilt_dir/api/server" ./cmd/server)
+      (cd "$root_dir" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$go_bin" build -trimpath -ldflags="-s -w" -o "$prebuilt_dir/worker/worker" ./cmd/worker)
+      (cd "$root_dir/web" && npm ci && npm run build)
+      cp -R "$root_dir/web/dist"/. "$prebuilt_dir/web/dist/"
+      build_precompiled_platform api build/package/api-prebuilt.Dockerfile "$prebuilt_dir/api"
+      build_precompiled_platform worker build/package/worker-prebuilt-release.Dockerfile "$prebuilt_dir/worker"
+      build_precompiled_platform web build/package/web-prebuilt.Dockerfile "$prebuilt_dir/web"
+      ;;
+  esac
 fi
 
 if [ -n "$reuse_official_layouts_dir" ]; then
@@ -176,6 +207,9 @@ cp "$root_dir/build/kompose/source.lock.yaml" "$staging_dir/policies/kompose-sou
 cp "$root_dir/build/kopia/source.lock.yaml" "$staging_dir/policies/kopia-source.lock.yaml"
 cp "$root_dir/deploy/offline/README.md" "$staging_dir/README.md"
 cp "$root_dir/docs/operations/migration-failure-lessons.md" "$staging_dir/MIGRATION-TROUBLESHOOTING.md"
+cp "$root_dir/MIGRATION_USER_GUIDE.md" "$staging_dir/MIGRATION_USER_GUIDE.md"
+mkdir -p "$staging_dir/docs/images/migration-user-guide"
+cp -R "$root_dir/docs/images/migration-user-guide"/. "$staging_dir/docs/images/migration-user-guide/"
 cp "$root_dir/deploy/offline/components.yaml" "$staging_dir/components.yaml"
 cp "$root_dir/deploy/offline/deploy.sh" "$staging_dir/deploy.sh"
 chmod 0755 "$staging_dir/deploy.sh"

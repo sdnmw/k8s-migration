@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 const ManifestName = "bundle-manifest.json"
@@ -45,6 +47,9 @@ func BuildManifest(root string) (BundleManifest, ImageLock, error) {
 		return BundleManifest{}, ImageLock{}, err
 	}
 	if err := verifyLockedAssets(root, lock); err != nil {
+		return BundleManifest{}, ImageLock{}, err
+	}
+	if err := verifyRequiredComponents(root, lock); err != nil {
 		return BundleManifest{}, ImageLock{}, err
 	}
 	files := make([]ManifestFile, 0)
@@ -147,6 +152,9 @@ func VerifyDirectory(root string) (BundleManifest, error) {
 	if err := verifyLockedAssets(root, lock); err != nil {
 		return BundleManifest{}, err
 	}
+	if err := verifyRequiredComponents(root, lock); err != nil {
+		return BundleManifest{}, err
+	}
 	seen := make(map[string]struct{}, len(expected.Files))
 	for _, file := range expected.Files {
 		clean := filepath.Clean(filepath.FromSlash(file.Path))
@@ -197,12 +205,57 @@ func verifyLockedAssets(root string, lock ImageLock) error {
 						return fmt.Errorf("image %s OCI layout is missing %s", image.Name, required)
 					}
 				}
-				if err := validateOCILayout(path, image.Source); err != nil {
+				if err := validateOCILayout(path, image.Source, image.Platforms); err != nil {
 					return fmt.Errorf("image %s OCI layout: %w", image.Name, err)
 				}
 			} else if !info.Mode().IsRegular() {
 				return fmt.Errorf("image %s %s must be a regular file", image.Name, label)
 			}
+		}
+	}
+	return nil
+}
+
+func verifyRequiredComponents(root string, lock ImageLock) error {
+	file, err := os.Open(filepath.Join(root, "components.yaml"))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("open component inventory: %w", err)
+	}
+	defer file.Close()
+	var inventory struct {
+		APIVersion    string `yaml:"apiVersion"`
+		Kind          string `yaml:"kind"`
+		BundleVersion string `yaml:"bundleVersion"`
+		Components    []struct {
+			Name          string `yaml:"name"`
+			Owner         string `yaml:"owner"`
+			ReleaseWindow int    `yaml:"releaseWindow"`
+			Required      bool   `yaml:"required"`
+			SourcePolicy  string `yaml:"sourcePolicy"`
+			ReleaseStatus string `yaml:"releaseStatus"`
+		} `yaml:"components"`
+	}
+	decoder := yaml.NewDecoder(io.LimitReader(file, 4<<20))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&inventory); err != nil {
+		return fmt.Errorf("decode component inventory: %w", err)
+	}
+	if inventory.APIVersion != LockAPIVersion || inventory.Kind != "OfflineComponentCatalog" {
+		return errors.New("component inventory apiVersion or kind is invalid")
+	}
+	if inventory.BundleVersion != lock.BundleVersion && !strings.HasPrefix(lock.BundleVersion, inventory.BundleVersion+"-") {
+		return fmt.Errorf("component inventory version mismatch: components=%s image-lock=%s", inventory.BundleVersion, lock.BundleVersion)
+	}
+	locked := make(map[string]bool, len(lock.Images))
+	for _, image := range lock.Images {
+		locked[image.Name] = true
+	}
+	for _, component := range inventory.Components {
+		if component.Required && !locked[component.Name] {
+			return fmt.Errorf("offline bundle is missing required image %s", component.Name)
 		}
 	}
 	return nil

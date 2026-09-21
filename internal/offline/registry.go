@@ -15,6 +15,8 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 )
 
@@ -85,6 +87,9 @@ func (i *RegistryImporter) Import(ctx context.Context, bundleRoot string, image 
 	layoutRoot, err := confinedPath(bundleRoot, image.LayoutPath)
 	if err != nil {
 		return ImportResult{}, err
+	}
+	if err := validateOCILayout(layoutRoot, image.Source, image.Platforms); err != nil {
+		return ImportResult{}, fmt.Errorf("OCI layout for %s: %w", image.Name, err)
 	}
 	indexBytes, err := os.ReadFile(filepath.Join(layoutRoot, "index.json"))
 	if err != nil {
@@ -258,7 +263,7 @@ func readOCIBlob(layoutRoot string, descriptor ociDescriptor) ([]byte, error) {
 	return value, nil
 }
 
-func validateOCILayout(layoutRoot, lockedSource string) error {
+func validateOCILayout(layoutRoot, lockedSource string, expectedPlatforms []string) error {
 	layoutBytes, err := os.ReadFile(filepath.Join(layoutRoot, "oci-layout"))
 	if err != nil {
 		return err
@@ -281,10 +286,24 @@ func validateOCILayout(layoutRoot, lockedSource string) error {
 	if index.Manifests[0].Digest != lockedDigest {
 		return fmt.Errorf("root %s does not match locked source digest %s", index.Manifests[0].Digest, lockedDigest)
 	}
-	return verifyDescriptorTree(layoutRoot, index.Manifests[0], map[string]bool{})
+	platforms := map[string]bool{}
+	if err := verifyDescriptorTree(layoutRoot, index.Manifests[0], map[string]bool{}, platforms); err != nil {
+		return err
+	}
+	want := append([]string(nil), expectedPlatforms...)
+	sort.Strings(want)
+	got := make([]string, 0, len(platforms))
+	for platform := range platforms {
+		got = append(got, platform)
+	}
+	sort.Strings(got)
+	if !slices.Equal(got, want) {
+		return fmt.Errorf("actual image platforms %v do not match locked platforms %v", got, want)
+	}
+	return nil
 }
 
-func verifyDescriptorTree(layoutRoot string, descriptor ociDescriptor, visited map[string]bool) error {
+func verifyDescriptorTree(layoutRoot string, descriptor ociDescriptor, visited, platforms map[string]bool) error {
 	if visited[descriptor.Digest] {
 		return nil
 	}
@@ -300,7 +319,7 @@ func verifyDescriptorTree(layoutRoot string, descriptor ociDescriptor, visited m
 			return fmt.Errorf("decode image index %s", descriptor.Digest)
 		}
 		for _, child := range index.Manifests {
-			if err := verifyDescriptorTree(layoutRoot, child, visited); err != nil {
+			if err := verifyDescriptorTree(layoutRoot, child, visited, platforms); err != nil {
 				return err
 			}
 		}
@@ -309,7 +328,24 @@ func verifyDescriptorTree(layoutRoot string, descriptor ociDescriptor, visited m
 		if err := json.Unmarshal(payload, &manifest); err != nil || manifest.SchemaVersion != 2 {
 			return fmt.Errorf("decode image manifest %s", descriptor.Digest)
 		}
-		for _, blob := range append([]ociDescriptor{manifest.Config}, manifest.Layers...) {
+		config, err := readOCIBlob(layoutRoot, manifest.Config)
+		if err != nil {
+			return err
+		}
+		var imageConfig struct {
+			Architecture string `json:"architecture"`
+			OS           string `json:"os"`
+		}
+		if err := json.Unmarshal(config, &imageConfig); err != nil {
+			return fmt.Errorf("decode image config %s", manifest.Config.Digest)
+		}
+		if imageConfig.OS != "" || imageConfig.Architecture != "" {
+			if imageConfig.OS == "" || imageConfig.Architecture == "" {
+				return fmt.Errorf("image config %s has incomplete platform metadata", manifest.Config.Digest)
+			}
+			platforms[imageConfig.OS+"/"+imageConfig.Architecture] = true
+		}
+		for _, blob := range manifest.Layers {
 			if _, err := readOCIBlob(layoutRoot, blob); err != nil {
 				return err
 			}

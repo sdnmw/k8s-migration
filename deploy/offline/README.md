@@ -6,6 +6,8 @@
 
 GitHub Release 中的 `sks-migration-center-0.2.0-linux-amd64.tar.gz` 是一次性迁移场景的完整离线包。归档包含 16 个 `linux/amd64` OCI Image Layout、平台 Helm Chart、静态 Linux AMD64 安装器、镜像锁和校验清单。部署端不需要访问公网，也不要求预装 Docker、Skopeo、Crane 或 Helm CLI。
 
+解压后的 `MIGRATION_USER_GUIDE.md` 提供 Nextcloud Compose 与 React + PostgreSQL Kubernetes 两条真实迁移的完整操作步骤、数据验证方法和界面截图。
+
 下载后先校验同一 Release 中的 SHA-256 sidecar：
 
 ```bash
