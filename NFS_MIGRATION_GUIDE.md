@@ -64,7 +64,7 @@
 - bucket
 - prefix
 
-“平台只有一个 MinIO”并不意味着两个集群里已有的 BSL 会自动改写为同一值。集群可能在不同时间安装、复用或手工修改过 Velero。当前 v0.2.0 的加固版本会在执行期检查两端仓库标识，不一致时直接阻止任务并显示两端实际值，避免备份完成后目标端长期等待。
+“平台只有一个 MinIO”并不意味着两个集群里已有的 BSL 会自动改写为同一值。集群可能在不同时间安装、复用或手工修改过 Velero。当前 v0.3.0 的加固版本会在执行期检查两端仓库标识，不一致时直接阻止任务并显示两端实际值，避免备份完成后目标端长期等待。
 
 ## 4. 平台操作步骤
 
@@ -151,7 +151,7 @@ cfa63cdb9831b73d84baa8c628422eb922bfa40bed4030dd0fdd7bd0ff557e08
 - 源 PVC 与目标 PVC：均为 Bound
 - 目标业务入口：NodePort 30835，可正常读出迁移数据
 
-## 6. v0.2.0 交付说明
+## 6. v0.3.0 交付说明
 
 此 NFS 场景的核心功能已经验证通过，可以用于交付，但应使用 GitHub Release 中当前的完整离线资产，并遵守以下前置条件：
 
@@ -164,8 +164,8 @@ cfa63cdb9831b73d84baa8c628422eb922bfa40bed4030dd0fdd7bd0ff557e08
 当前离线资产校验信息：
 
 ```text
-文件：sks-migration-center-0.2.0-linux-amd64.tar.gz
-SHA-256：以同目录的 sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256 为准
+文件：sks-migration-center-0.3.0-linux-amd64.tar.gz
+SHA-256：以同目录的 sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256 为准
 镜像数量：16
 架构：linux/amd64
 ```

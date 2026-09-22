@@ -1,10 +1,10 @@
 apiVersion: migration.smartx.com/v1alpha1
 kind: OfflineImageLock
-bundleVersion: 0.2.0-linux-amd64
+bundleVersion: 0.3.0-linux-amd64
 images:
-  - {name: platform-api, source: "local.build/api@@API_DIGEST@", target: "sks/sks-migration-api:0.2.0", platforms: [linux/amd64], layoutPath: images/api, sbomPath: sbom/api.spdx.json, signaturePath: signatures/api.bundle.json, scanPath: scans/api.json}
-  - {name: platform-worker, source: "local.build/worker@@WORKER_DIGEST@", target: "sks/sks-migration-worker:0.2.0", platforms: [linux/amd64], layoutPath: images/worker, sbomPath: sbom/worker.spdx.json, signaturePath: signatures/worker.bundle.json, scanPath: scans/worker.json}
-  - {name: platform-web, source: "local.build/web@@WEB_DIGEST@", target: "sks/sks-migration-web:0.2.0", platforms: [linux/amd64], layoutPath: images/web, sbomPath: sbom/web.spdx.json, signaturePath: signatures/web.bundle.json, scanPath: scans/web.json}
+  - {name: platform-api, source: "local.build/api@@API_DIGEST@", target: "sks/sks-migration-api:0.3.0", platforms: [linux/amd64], layoutPath: images/api, sbomPath: sbom/api.spdx.json, signaturePath: signatures/api.bundle.json, scanPath: scans/api.json}
+  - {name: platform-worker, source: "local.build/worker@@WORKER_DIGEST@", target: "sks/sks-migration-worker:0.3.0", platforms: [linux/amd64], layoutPath: images/worker, sbomPath: sbom/worker.spdx.json, signaturePath: signatures/worker.bundle.json, scanPath: scans/worker.json}
+  - {name: platform-web, source: "local.build/web@@WEB_DIGEST@", target: "sks/sks-migration-web:0.3.0", platforms: [linux/amd64], layoutPath: images/web, sbomPath: sbom/web.spdx.json, signaturePath: signatures/web.bundle.json, scanPath: scans/web.json}
   - {name: postgresql, source: "official.repack/postgres@@POSTGRES_DIGEST@", target: "sks/sks-migration-postgres:18.3-bookworm", platforms: [linux/amd64], layoutPath: images/postgres, sbomPath: sbom/postgres.spdx.json, signaturePath: signatures/postgres.bundle.json, scanPath: scans/postgres.json}
   - {name: minio, source: "official.repack/minio@@MINIO_DIGEST@", target: "sks/minio:RELEASE.2025-09-07T16-13-09Z", platforms: [linux/amd64], layoutPath: images/minio, sbomPath: sbom/minio.spdx.json, signaturePath: signatures/minio.bundle.json, scanPath: scans/minio.json}
   - {name: velero, source: "official.repack/velero@@VELERO_DIGEST@", target: "sks/velero:v1.18.1", platforms: [linux/amd64], layoutPath: images/velero, sbomPath: sbom/velero.spdx.json, signaturePath: signatures/velero.bundle.json, scanPath: scans/velero.json}
