@@ -60,9 +60,9 @@ export default function StorageProfilesPage({ preview = false }: { preview?: boo
     { title: 'NFS Server / Export', key: 'nfs', render: (_, value) => value.nfsServer ? `${value.nfsServer}:${value.nfsExport}` : '—' },
     { title: '回收策略', dataIndex: 'reclaimPolicy', width: 92, render: (value) => <Tag color={value === 'Retain' ? 'blue' : 'default'}>{value}</Tag> },
     { title: '状态', dataIndex: 'status', width: 100, render: profileStatus },
-    { title: '操作', key: 'actions', width: 200, render: (_, value) => value.type === 'SMTX_BLOCK' ? '—' : <Space size={4}>
-      <Button size="small" icon={<ToolOutlined />} loading={install.isPending && install.variables === value.id} onClick={() => install.mutate(value.id)}>安装并验证</Button>
-      <Button size="small" icon={<ExperimentOutlined />} disabled={value.status !== 'READY'} loading={probe.isPending && probe.variables === value.id} onClick={() => probe.mutate(value.id)}>复测</Button>
+    { title: '操作', key: 'actions', width: 286, render: (_, value) => value.type === 'SMTX_BLOCK' ? '—' : <Space size={4}>
+      <Button size="small" icon={<ToolOutlined />} loading={install.isPending && install.variables === value.id} onClick={() => install.mutate(value.id)}>准备存储并验证</Button>
+      <Button size="small" icon={<ExperimentOutlined />} disabled={value.status !== 'READY'} loading={probe.isPending && probe.variables === value.id} onClick={() => probe.mutate(value.id)}>重新验证读写</Button>
     </Space> },
   ]
 

@@ -15,28 +15,28 @@ SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用�
 - 目标集群节点能够从 Harbor 拉取镜像；
 - 目标集群中可用的 SmartX ELF CSI RWO StorageClass，或明确指定其他 RWO StorageClass。
 
-完整离线包发布在 [GitHub Release v0.2.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.2.0)：
+完整离线包发布在 [GitHub Release v0.3.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.3.0)：
 
-- `sks-migration-center-0.2.0-linux-amd64.tar.gz`
-- `sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256`
+- `sks-migration-center-0.3.0-linux-amd64.tar.gz`
+- `sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256`
 
 归档包含 16 个 `linux/amd64` OCI 镜像、平台和 Add-on Helm Chart、镜像锁、静态安装器及校验清单。安装过程不访问公网，也不要求目标终端安装 Docker、Helm、Skopeo 或 Crane。
 
 ### 2. 校验并解压
 
 ```bash
-sha256sum -c sks-migration-center-0.2.0-linux-amd64.tar.gz.sha256
+sha256sum -c sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256
 
-mkdir -p sks-migration-center-0.2.0
-tar -xzf sks-migration-center-0.2.0-linux-amd64.tar.gz \
-  -C sks-migration-center-0.2.0
-cd sks-migration-center-0.2.0
+mkdir -p sks-migration-center-0.3.0
+tar -xzf sks-migration-center-0.3.0-linux-amd64.tar.gz \
+  -C sks-migration-center-0.3.0
+cd sks-migration-center-0.3.0
 ```
 
 当前发行归档 SHA-256：
 
 ```text
-457130ecef2c48465d9313406c0999d4dbf8c575670c57c43b418fbefbdf8778
+16ee0da3c1602303397c47b8ce2ddde145a4a166a315e9548ecbd96dbd7f3e50
 ```
 
 ### 3. 准备凭据文件

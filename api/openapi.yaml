@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SKS Migration Center API
-  version: 0.2.0
+  version: 0.3.0
   description: API contract for Kubernetes and Docker Compose migrations to SmartX SKS workload clusters.
   license:
     name: Proprietary
