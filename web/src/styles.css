@@ -306,6 +306,9 @@ button, input { font: inherit; }
 .connection-check span { display: flex; flex-direction: column; }
 .connection-check small { margin-top: 2px; color: var(--color-text-secondary); }
 .capability-snapshot .ant-descriptions { margin-bottom: 22px; }
+.velero-health-card { margin-top: 8px; }
+.velero-health-card .velero-health-checks { margin: 14px 0; }
+.velero-health-card .page-alert { margin-bottom: 0; }
 .capability-group { margin-bottom: 20px; }
 .capability-group > .ant-typography { display: block; margin-bottom: 8px; }
 .capability-group .ant-table { border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden; }

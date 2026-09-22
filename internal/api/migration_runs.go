@@ -490,6 +490,8 @@ func writeMigrationRunError(w http.ResponseWriter, err error) {
 		writeMigrationRunProblem(w, http.StatusNotFound, "MIGRATION_RUN_NOT_FOUND", "迁移任务或迁移计划不存在。")
 	case errors.Is(err, repository.ErrConflict), errors.Is(err, migrationservice.ErrInvalidRunState):
 		writeMigrationRunProblem(w, http.StatusConflict, "MIGRATION_RUN_CONFLICT", "迁移任务当前状态不允许执行该操作。")
+	case errors.Is(err, migrationservice.ErrRetryPrerequisite):
+		writeMigrationRunProblem(w, http.StatusConflict, "MIGRATION_RETRY_NOT_READY", strings.TrimPrefix(err.Error(), migrationservice.ErrRetryPrerequisite.Error()+": "))
 	case errors.Is(err, migrationservice.ErrInvalidInput):
 		writeMigrationRunProblem(w, http.StatusBadRequest, "MIGRATION_RUN_INVALID", strings.TrimPrefix(err.Error(), migrationservice.ErrInvalidInput.Error()+": "))
 	default:

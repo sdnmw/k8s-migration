@@ -23,7 +23,9 @@ func TestLiveWorkerFixImport(t *testing.T) {
 	}
 	var index ociIndex
 	layout := os.Getenv("LIVE_WORKER_LAYOUT")
-	if layout == "" { layout = "output/harbor-worker-fix" }
+	if layout == "" {
+		layout = "output/harbor-worker-fix"
+	}
 	if e := json.Unmarshal(read(layout+"/index.json"), &index); e != nil {
 		t.Fatal(e)
 	}
@@ -33,7 +35,9 @@ func TestLiveWorkerFixImport(t *testing.T) {
 	}
 	digest := index.Manifests[0].Digest
 	target := os.Getenv("LIVE_WORKER_TARGET")
-	if target == "" { target = "sks/sks-migration-worker:harbor-fix-20260910" }
+	if target == "" {
+		target = "sks/sks-migration-worker:harbor-fix-20260910"
+	}
 	result, e := importer.Import(context.Background(), root, LockedImage{Name: "worker-fix", Source: "local/worker@" + digest, Target: target, Platforms: []string{"linux/amd64"}, LayoutPath: layout, SBOMPath: "sbom/worker.json", Signature: "signatures/worker.json", ScanPath: "scans/worker.json"})
 	if e != nil {
 		t.Fatal(e)

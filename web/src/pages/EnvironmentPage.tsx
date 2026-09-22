@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import {
   ApartmentOutlined, CheckCircleOutlined, CloudServerOutlined, DeleteOutlined, DisconnectOutlined,
   ExclamationCircleOutlined, FileTextOutlined, PlusOutlined, ReloadOutlined,
-  RadarChartOutlined,
+  RadarChartOutlined, ToolOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -13,8 +13,9 @@ import Modal from '../components/EditorModal'
 import Drawer from '../components/DetailDrawer'
 import type { UploadProps } from 'antd'
 import {
-  APIError, createEnvironment, deleteEnvironment, discoverComposeApplications, discoverKubernetesApplication, listEnvironmentNamespaces, listEnvironments, refreshEnvironmentCapabilities,
-  testEnvironmentConnection, type ClusterCapabilities, type ConnectionTest, type Environment, type EnvironmentRole, type SourceApplication,
+  APIError, createEnvironment, deleteEnvironment, discoverComposeApplications, discoverKubernetesApplication, getVeleroStatus,
+  listEnvironmentNamespaces, listEnvironments, listObjectStorageProfiles, refreshEnvironmentCapabilities, repairVelero,
+  testEnvironmentConnection, type ClusterCapabilities, type ConnectionTest, type Environment, type EnvironmentRole, type SourceApplication, type VeleroInstallResult,
 } from '../api/client'
 import PageHeader from '../components/PageHeader'
 import ComposeAnalyzeModal from '../components/ComposeAnalyzeModal'
@@ -28,9 +29,12 @@ type FormValues = {
   password?: string; privateKeyPassword?: string; hostKeyFingerprint?: string; sshAuthMethod?: 'PASSWORD' | 'PRIVATE_KEY'
 }
 
+type VeleroRepairValues = { profileId: string; prefix: string; kubeletRoot: string }
+
 export default function EnvironmentPage({ role, preview = false }: { role: EnvironmentRole; preview?: boolean }) {
   const { message } = AntApplication.useApp()
   const [form] = Form.useForm<FormValues>()
+  const [repairForm] = Form.useForm<VeleroRepairValues>()
   const [open, setOpen] = useState(false)
   const [composeOpen, setComposeOpen] = useState(false)
   const [sourceKind, setSourceKind] = useState<'KUBERNETES' | 'DOCKER_COMPOSE'>('KUBERNETES')
@@ -39,7 +43,8 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
   const [inventoryResult, setInventoryResult] = useState<SourceApplication>()
   const [testingID, setTestingID] = useState<string>()
   const [connectionResult, setConnectionResult] = useState<{ name: string; result: ConnectionTest }>()
-  const [capabilityResult, setCapabilityResult] = useState<{ name: string; capabilities: ClusterCapabilities }>()
+  const [capabilityResult, setCapabilityResult] = useState<{ environment: Environment; capabilities: ClusterCapabilities }>()
+  const [repairEnvironment, setRepairEnvironment] = useState<Environment>()
   const [discoveringID, setDiscoveringID] = useState<string>()
   const queryClient = useQueryClient()
   const sshAuthMethod = Form.useWatch('sshAuthMethod', form) ?? 'PASSWORD'
@@ -54,6 +59,15 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
     queryFn: () => listEnvironmentNamespaces(inventoryEnvironment?.id ?? ''),
     enabled: Boolean(inventoryEnvironment) && !preview,
     initialData: preview ? ['business', 'default'] : undefined,
+  })
+  const objectStorageProfiles = useQuery({
+    queryKey: ['object-storage-profiles'], queryFn: listObjectStorageProfiles,
+    enabled: !preview && (Boolean(repairEnvironment) || capabilityResult?.environment.kind === 'KUBERNETES'),
+  })
+  const veleroHealth = useQuery({
+    queryKey: ['velero-health', capabilityResult?.environment.id],
+    queryFn: () => getVeleroStatus(capabilityResult!.environment.id),
+    enabled: !preview && capabilityResult?.environment.kind === 'KUBERNETES',
   })
 
   const createMutation = useMutation({
@@ -94,13 +108,39 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
     mutationFn: refreshEnvironmentCapabilities,
     onMutate: (id) => setDiscoveringID(id),
     onSuccess: async (capabilities, id) => {
-      setCapabilityResult({ name: rows.find((item) => item.id === id)?.name ?? 'Kubernetes 集群', capabilities })
+      const environment = rows.find((item) => item.id === id)
+      if (environment) setCapabilityResult({ environment, capabilities })
       await queryClient.invalidateQueries({ queryKey: ['environments'] })
+      await queryClient.invalidateQueries({ queryKey: ['velero-health', id] })
       message.success('集群能力快照已刷新')
     },
     onError: (error) => message.error(errorMessage(error)),
     onSettled: () => setDiscoveringID(undefined),
   })
+  const repairMutation = useMutation({
+    mutationFn: (values: VeleroRepairValues) => repairVelero(repairEnvironment!.id, values.profileId, values.kubeletRoot, values.prefix),
+    onSuccess: async () => {
+      const environmentID = repairEnvironment?.id
+      setRepairEnvironment(undefined)
+      repairForm.resetFields()
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['velero-health', environmentID] }),
+        queryClient.invalidateQueries({ queryKey: ['addon-statuses', environmentID] }),
+      ])
+      message.success('Velero、node-agent 和迁移存储位置已原地修复并通过检查')
+    },
+    onError: (error) => message.error(errorMessage(error)),
+  })
+
+  const openVeleroRepair = (environment: Environment, status?: VeleroInstallResult) => {
+    const values = status?.installation?.values ?? {}
+    const storedProfileID = typeof values.objectStorageProfileId === 'string' ? values.objectStorageProfileId : undefined
+    const storedPrefix = typeof values.prefix === 'string' ? values.prefix : status?.backupStorageLocation.prefix
+    const kubeletRoot = typeof values.kubeletRoot === 'string' ? values.kubeletRoot : '/var/lib/kubelet'
+    const onlyProfile = objectStorageProfiles.data?.length === 1 ? objectStorageProfiles.data[0].id : undefined
+    repairForm.setFieldsValue({ profileId: storedProfileID ?? onlyProfile, prefix: storedPrefix ?? 'migrations', kubeletRoot })
+    setRepairEnvironment(environment)
+  }
   const inventoryMutation = useMutation({
     mutationFn: () => preview ? Promise.resolve(previewApplication) : discoverKubernetesApplication(inventoryEnvironment?.id ?? '', selectedNamespace ?? ''),
     onSuccess: (value) => {
@@ -124,7 +164,7 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
   const columns: ColumnsType<Environment> = [
     {
       title: '名称', dataIndex: 'name', width: 190,
-      render: (value: string, record) => <Space><CloudServerOutlined className="environment-kind-icon" /><span><Button type="link" className="table-link" onClick={() => setCapabilityResult({ name: record.name, capabilities: record.capabilities })}>{value}</Button><small className="table-secondary">{record.kind === 'KUBERNETES' ? 'Kubernetes' : 'Docker Compose'}</small></span></Space>,
+      render: (value: string, record) => <Space><CloudServerOutlined className="environment-kind-icon" /><span><Button type="link" className="table-link" onClick={() => setCapabilityResult({ environment: record, capabilities: record.capabilities })}>{value}</Button><small className="table-secondary">{record.kind === 'KUBERNETES' ? 'Kubernetes' : 'Docker Compose'}</small></span></Space>,
     },
     { title: '连接地址', dataIndex: 'endpoint', ellipsis: true, render: (value?: string) => <Text copyable={Boolean(value)}>{value || '—'}</Text> },
     {
@@ -241,11 +281,39 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
       </Modal>
       <KubernetesInventoryDrawer application={inventoryResult} targets={(environments.data ?? []).filter((item) => item.role === 'TARGET')} preview={preview} onClose={() => setInventoryResult(undefined)} />
       <Drawer
-        title={`${capabilityResult?.name ?? ''} · 能力快照`} size={560} open={Boolean(capabilityResult)}
+        title={`${capabilityResult?.environment.name ?? ''} · 能力快照`} size={640} open={Boolean(capabilityResult)}
         onClose={() => setCapabilityResult(undefined)} destroyOnHidden
       >
-        {capabilityResult && <CapabilitySnapshot capabilities={capabilityResult.capabilities} />}
+        {capabilityResult && <>
+          <CapabilitySnapshot capabilities={capabilityResult.capabilities} />
+          {capabilityResult.environment.kind === 'KUBERNETES' && <VeleroHealthCard
+            status={veleroHealth.data} loading={veleroHealth.isPending} error={veleroHealth.error}
+            onRefresh={() => veleroHealth.refetch()}
+            onRepair={() => openVeleroRepair(capabilityResult.environment, veleroHealth.data)}
+          />}
+        </>}
       </Drawer>
+      <Modal
+        title={`${repairEnvironment?.name ?? ''} · 修复迁移组件`} open={Boolean(repairEnvironment)}
+        okText="开始原地修复" cancelText="取消" confirmLoading={repairMutation.isPending}
+        onOk={() => repairForm.submit()}
+        onCancel={() => { setRepairEnvironment(undefined); repairForm.resetFields(); repairMutation.reset() }} destroyOnHidden
+      >
+        <Alert className="environment-modal-alert" showIcon type="info" title="无需删除环境。系统会重新部署缺失的 Velero/node-agent，并重建 migration-minio BSL；不会删除对象存储中的备份数据。" />
+        <Form<VeleroRepairValues> form={repairForm} layout="vertical" preserve={false} onFinish={(values) => repairMutation.mutate(values)}>
+          <Form.Item name="profileId" label="迁移对象存储" rules={[{ required: true, message: '请选择对象存储' }]} extra="源端与目标端必须选择同一个对象存储，并使用相同前缀。">
+            <Select loading={objectStorageProfiles.isPending} placeholder="选择已有 MinIO / S3" options={(objectStorageProfiles.data ?? []).map((value) => ({ value: value.id, label: `${value.name} · ${value.endpoint}/${value.bucket}` }))} />
+          </Form.Item>
+          <Form.Item name="prefix" label="仓库前缀" rules={[{ pattern: /^(?!.*\.\.)(?!.*\\)[^\r\n]*$/, message: '前缀不能包含路径穿越、反斜线或换行' }]}>
+            <Input placeholder="migrations" />
+          </Form.Item>
+          <Form.Item name="kubeletRoot" label="Kubelet Root" rules={[{ required: true }, { pattern: /^\/(?!.*\.\.)/, message: '必须是无路径穿越的绝对路径' }]}>
+            <Input />
+          </Form.Item>
+          {objectStorageProfiles.isError && <Alert showIcon type="error" title="无法读取对象存储" description={errorMessage(objectStorageProfiles.error)} />}
+          {repairMutation.isError && <Alert showIcon type="error" title="修复失败" description={errorMessage(repairMutation.error)} />}
+        </Form>
+      </Modal>
       <Modal
         title={`${connectionResult?.name ?? ''} · 连接检查`} open={Boolean(connectionResult)} footer={null}
         onCancel={() => setConnectionResult(undefined)} destroyOnHidden
@@ -276,6 +344,42 @@ function EnvironmentStatusTag({ status }: { status: Environment['status'] }) {
 
 function errorMessage(error: unknown) {
   return error instanceof APIError || error instanceof Error ? error.message : '请求失败'
+}
+
+function VeleroHealthCard({ status, loading, error, onRefresh, onRepair }: {
+  status?: VeleroInstallResult; loading: boolean; error: unknown; onRefresh: () => void; onRepair: () => void
+}) {
+  const state = status?.health
+  const ready = state === 'READY'
+  const needsRepair = state === 'NEEDS_REPAIR' || state === 'NOT_INSTALLED'
+  const location = status?.backupStorageLocation
+  const title = ready ? '迁移组件就绪' : state === 'CHECK_FAILED' ? '迁移组件检查失败' : state === 'NOT_INSTALLED' ? '迁移组件未安装' : '迁移组件需要修复'
+  return <Card
+    className="velero-health-card" size="small" title={<Space><ToolOutlined /><span>迁移组件</span>{state && <Tag color={ready ? 'success' : state === 'CHECK_FAILED' ? 'warning' : 'error'}>{title}</Tag>}</Space>}
+    extra={<Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={onRefresh}>实时检查</Button>}
+  >
+    {Boolean(error) && <Alert showIcon type="error" title="无法检查迁移组件" description={errorMessage(error)} />}
+    {!error && status && <>
+      <Descriptions size="small" column={1} items={[
+        { key: 'record', label: '历史安装记录', children: status.installation?.status ? `${status.installation.status} · ${status.installation.version || '版本未知'}` : '无' },
+        { key: 'observed', label: '本次检查', children: status.observedAt ? new Date(status.observedAt).toLocaleString() : '—' },
+        { key: 'repository', label: '当前仓库', children: location?.endpoint ? `${location.endpoint}/${location.bucket}${location.prefix ? `/${location.prefix}` : ''}` : location?.message || '未发现' },
+      ]} />
+      <div className="connection-checks velero-health-checks">
+        {(status.checks ?? []).map((check) => <div className="connection-check" key={check.name}>
+          {check.status === 'PASSED' ? <CheckCircleOutlined className="semantic-success" /> : check.status === 'WARNING' ? <ExclamationCircleOutlined className="semantic-warning" /> : <DisconnectOutlined className="semantic-error" />}
+          <span><Text strong>{check.name}</Text><small>{check.message}</small></span>
+        </div>)}
+      </div>
+      {needsRepair && status.repairable && <Alert
+        className="page-alert" showIcon type="error" title="可以在当前环境原地修复"
+        description="修复完成并确认 BSL Available 后，再重新执行迁移；不需要删除环境，也不会改写历史任务。"
+        action={<Button type="primary" danger onClick={onRepair}>原地修复</Button>}
+      />}
+      {needsRepair && !status.repairable && <Alert className="page-alert" showIcon type="warning" title="外部管理的 Velero 不完整" description="请先由原管理员恢复 Velero server 与 node-agent，再使用“复用已有 Velero”重建迁移 BSL。" />}
+      {state === 'CHECK_FAILED' && <Alert className="page-alert" showIcon type="warning" title="尚未执行修复" description="当前无法可靠读取集群状态，请先恢复 kubeconfig 权限或集群连通性。" />}
+    </>}
+  </Card>
 }
 
 function CapabilitySnapshot({ capabilities }: { capabilities: ClusterCapabilities }) {

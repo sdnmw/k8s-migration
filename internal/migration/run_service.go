@@ -12,6 +12,7 @@ import (
 )
 
 var ErrInvalidRunState = errors.New("invalid migration run state")
+var ErrRetryPrerequisite = errors.New("migration retry prerequisite is not ready")
 
 func (s *RunService) Delete(ctx context.Context, id uuid.UUID) error {
 	deleter, ok := s.runs.(interface {
@@ -24,17 +25,20 @@ func (s *RunService) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 type RunService struct {
-	plans    repository.MigrationPlanRepository
-	runs     repository.MigrationRunRepository
-	progress repository.MigrationProgressRepository
-	clock    func() time.Time
-	newID    func() uuid.UUID
-	evidence RunEvidenceCapture
+	plans     repository.MigrationPlanRepository
+	runs      repository.MigrationRunRepository
+	progress  repository.MigrationProgressRepository
+	clock     func() time.Time
+	newID     func() uuid.UUID
+	evidence  RunEvidenceCapture
+	retryGate RetryReadinessCheck
 }
 
 type RunEvidenceCapture interface {
 	CaptureInitial(context.Context, uuid.UUID) error
 }
+
+type RetryReadinessCheck func(context.Context, domainmigration.Plan) error
 
 func NewRunService(plans repository.MigrationPlanRepository, runs repository.MigrationRunRepository, progress ...repository.MigrationProgressRepository) (*RunService, error) {
 	if plans == nil || runs == nil {
@@ -49,6 +53,10 @@ func NewRunService(plans repository.MigrationPlanRepository, runs repository.Mig
 
 func (s *RunService) ConfigureEvidence(value RunEvidenceCapture) {
 	s.evidence = value
+}
+
+func (s *RunService) ConfigureRetryReadinessCheck(value RetryReadinessCheck) {
+	s.retryGate = value
 }
 
 func (s *RunService) VolumeTransfers(ctx context.Context, runID uuid.UUID) ([]domainmigration.VolumeTransfer, error) {
@@ -92,6 +100,11 @@ func (s *RunService) Retry(ctx context.Context, runID uuid.UUID) (domainmigratio
 	plan, err := s.plans.GetPlan(ctx, previous.PlanID)
 	if err != nil {
 		return domainmigration.RunSnapshot{}, err
+	}
+	if s.retryGate != nil {
+		if err := s.retryGate(ctx, plan); err != nil {
+			return domainmigration.RunSnapshot{}, err
+		}
 	}
 	return s.schedule(ctx, plan, true)
 }

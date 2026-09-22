@@ -183,6 +183,86 @@ func TestReuseRequiresExistingNodeAgent(t *testing.T) {
 	}
 }
 
+func TestStatusDoesNotTrustStaleReadyRecordWhenVeleroWasDeleted(t *testing.T) {
+	environmentID, kubeconfigID := uuid.New(), uuid.New()
+	store := &fakePlatformRepository{installation: platform.AddonInstallation{
+		ID: uuid.New(), EnvironmentID: environmentID, Type: platform.AddonVelero, Version: VeleroVersion,
+		Status: platform.InstallationReady, Values: map[string]any{"managed": true},
+	}}
+	service, err := NewService(store, &fakeEnvironmentRepository{value: domainenvironment.Environment{
+		ID: environmentID, Kind: domainenvironment.KindKubernetes, Status: domainenvironment.StatusConnected, CredentialID: &kubeconfigID,
+	}}, &fakeVault{values: map[uuid.UUID][]byte{kubeconfigID: []byte("kubeconfig")}}, &fakeManager{}, &fakeCluster{}, &fakeCR{}, Images{Velero: veleroImage, AWS: pluginImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Status(context.Background(), environmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Health != HealthNeedsRepair || !result.Repairable || result.Installation.Status != platform.InstallationReady {
+		t.Fatalf("stale installation was not diagnosed: %+v", result)
+	}
+	if len(result.Checks) != 1 || !strings.Contains(result.Checks[0].Message, "Deployment") {
+		t.Fatalf("missing resource evidence: %+v", result.Checks)
+	}
+}
+
+func TestStatusDetectsRepositoryDrift(t *testing.T) {
+	environmentID, kubeconfigID, profileID := uuid.New(), uuid.New(), uuid.New()
+	store := &fakePlatformRepository{
+		profile: platform.ObjectStorageProfile{ID: profileID, Endpoint: "https://minio.example.test", Bucket: "velero"},
+		installation: platform.AddonInstallation{
+			ID: uuid.New(), EnvironmentID: environmentID, Type: platform.AddonVelero, Version: VeleroVersion,
+			Status: platform.InstallationReady, Values: map[string]any{"managed": true, "objectStorageProfileId": profileID.String(), "prefix": "migrations/shared"},
+		},
+	}
+	service, err := NewService(store, &fakeEnvironmentRepository{value: domainenvironment.Environment{
+		ID: environmentID, Kind: domainenvironment.KindKubernetes, Status: domainenvironment.StatusConnected, CredentialID: &kubeconfigID,
+	}}, &fakeVault{values: map[uuid.UUID][]byte{kubeconfigID: []byte("kubeconfig")}}, &fakeManager{}, &fakeCluster{existing: kubernetesadapter.VeleroInstallation{
+		Exists: true, ServerImage: "velero:v1", NodeAgentImage: "velero:v1",
+	}}, &fakeCR{status: veleroadapter.BackupStorageLocationStatus{
+		Name: BackupLocationName, Phase: "Available", Endpoint: "https://other.example.test", Bucket: "velero", Prefix: "migrations/other",
+	}}, Images{Velero: veleroImage, AWS: pluginImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Status(context.Background(), environmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Health != HealthNeedsRepair || !result.Repairable || !strings.Contains(result.Checks[len(result.Checks)-1].Message, "不一致") {
+		t.Fatalf("repository drift was not diagnosed: %+v", result)
+	}
+}
+
+func TestStatusReturnsReadyOnlyAfterLiveChecks(t *testing.T) {
+	environmentID, kubeconfigID, profileID := uuid.New(), uuid.New(), uuid.New()
+	store := &fakePlatformRepository{
+		profile: platform.ObjectStorageProfile{ID: profileID, Endpoint: "https://minio.example.test", Bucket: "velero"},
+		installation: platform.AddonInstallation{
+			ID: uuid.New(), EnvironmentID: environmentID, Type: platform.AddonVelero, Version: VeleroVersion,
+			Status: platform.InstallationReady, Values: map[string]any{"managed": true, "objectStorageProfileId": profileID.String(), "prefix": "migrations"},
+		},
+	}
+	service, err := NewService(store, &fakeEnvironmentRepository{value: domainenvironment.Environment{
+		ID: environmentID, Kind: domainenvironment.KindKubernetes, Status: domainenvironment.StatusConnected, CredentialID: &kubeconfigID,
+	}}, &fakeVault{values: map[uuid.UUID][]byte{kubeconfigID: []byte("kubeconfig")}}, &fakeManager{}, &fakeCluster{existing: kubernetesadapter.VeleroInstallation{
+		Exists: true, ServerImage: "velero:v1", NodeAgentImage: "velero:v1",
+	}}, &fakeCR{status: veleroadapter.BackupStorageLocationStatus{
+		Name: BackupLocationName, Phase: "Available", Endpoint: "https://minio.example.test", Bucket: "velero", Prefix: "migrations",
+	}}, Images{Velero: veleroImage, AWS: pluginImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Status(context.Background(), environmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Health != HealthReady || len(result.Checks) != 3 {
+		t.Fatalf("live installation should be ready: %+v", result)
+	}
+}
+
 type fakeVault struct{ values map[uuid.UUID][]byte }
 
 func (f *fakeVault) Resolve(_ context.Context, id uuid.UUID) ([]byte, error) {
@@ -266,6 +346,8 @@ func (f *fakeCluster) PutOpaqueSecret(_ context.Context, _ []byte, _, _ string, 
 type fakeCR struct {
 	spec   veleroadapter.BackupStorageLocationSpec
 	phases []string
+	status veleroadapter.BackupStorageLocationStatus
+	err    error
 }
 
 func (f *fakeCR) EnsureBackupStorageLocation(_ context.Context, _ []byte, spec veleroadapter.BackupStorageLocationSpec) (veleroadapter.BackupStorageLocationStatus, error) {
@@ -278,6 +360,12 @@ func (f *fakeCR) EnsureBackupStorageLocation(_ context.Context, _ []byte, spec v
 }
 
 func (f *fakeCR) BackupStorageLocationStatus(_ context.Context, _ []byte, _, name string) (veleroadapter.BackupStorageLocationStatus, error) {
+	if f.err != nil {
+		return veleroadapter.BackupStorageLocationStatus{}, f.err
+	}
+	if f.status.Name != "" {
+		return f.status, nil
+	}
 	phase := "Available"
 	if len(f.phases) > 0 {
 		phase, f.phases = f.phases[0], f.phases[1:]

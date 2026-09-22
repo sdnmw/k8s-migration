@@ -105,6 +105,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	private.HandleFunc("GET /api/v1/object-storage/minio/source-policy", getMinIOSourcePolicyHandler(deps))
 	private.HandleFunc("GET /api/v1/addons/{environmentId}/status", listAddonStatusHandler(deps))
 	private.HandleFunc("POST /api/v1/addons/{environmentId}/install", installAddonHandler(deps))
+	private.HandleFunc("GET /api/v1/addons/{environmentId}/velero/status", veleroStatusHandler(deps))
+	private.HandleFunc("POST /api/v1/addons/{environmentId}/velero/repair", repairVeleroHandler(deps))
 	private.HandleFunc("POST /api/v1/addons/{environmentId}/velero/reuse", reuseVeleroHandler(deps))
 	private.HandleFunc("DELETE /api/v1/addons/{environmentId}/velero", uninstallAddonHandler(deps))
 	private.HandleFunc("POST /api/v1/compose/analyze", analyzeComposeHandler(deps))

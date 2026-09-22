@@ -25,6 +25,7 @@ import (
 	"github.com/smartx/sks-migration-center/internal/config"
 	"github.com/smartx/sks-migration-center/internal/credential"
 	"github.com/smartx/sks-migration-center/internal/database"
+	domainmigration "github.com/smartx/sks-migration-center/internal/domain/migration"
 	environmentservice "github.com/smartx/sks-migration-center/internal/environment"
 	mappingservice "github.com/smartx/sks-migration-center/internal/mapping"
 	migrationservice "github.com/smartx/sks-migration-center/internal/migration"
@@ -207,6 +208,29 @@ func main() {
 		logger.Error("Velero add-on service initialization failed", "error", err)
 		os.Exit(1)
 	}
+	migrationRunService.ConfigureRetryReadinessCheck(func(ctx context.Context, plan domainmigration.Plan) error {
+		if plan.Strategy.VolumeMode == domainmigration.VolumeComposeKopia {
+			return nil
+		}
+		source, err := veleroService.Status(ctx, plan.SourceEnvironmentID)
+		if err != nil {
+			return fmt.Errorf("%w: 无法检查源环境迁移组件：%v", migrationservice.ErrRetryPrerequisite, err)
+		}
+		if source.Health != veleroservice.HealthReady {
+			return fmt.Errorf("%w: 源环境迁移组件未就绪（%s）；请在环境能力快照中完成原地修复", migrationservice.ErrRetryPrerequisite, source.Health)
+		}
+		target, err := veleroService.Status(ctx, plan.TargetEnvironmentID)
+		if err != nil {
+			return fmt.Errorf("%w: 无法检查目标环境迁移组件：%v", migrationservice.ErrRetryPrerequisite, err)
+		}
+		if target.Health != veleroservice.HealthReady {
+			return fmt.Errorf("%w: 目标环境迁移组件未就绪（%s）；请在环境能力快照中完成原地修复", migrationservice.ErrRetryPrerequisite, target.Health)
+		}
+		if !sameMigrationRepository(source.Location, target.Location) {
+			return fmt.Errorf("%w: 源端与目标端 migration-minio 仓库不一致；请用同一对象存储和前缀修复后重试", migrationservice.ErrRetryPrerequisite)
+		}
+		return nil
+	})
 	metrics := observability.New()
 
 	server := &http.Server{
@@ -266,6 +290,11 @@ func main() {
 		logger.Error("api server shutdown failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func sameMigrationRepository(left, right veleroadapter.BackupStorageLocationStatus) bool {
+	return strings.TrimRight(left.Endpoint, "/") == strings.TrimRight(right.Endpoint, "/") &&
+		left.Bucket == right.Bucket && strings.Trim(left.Prefix, "/") == strings.Trim(right.Prefix, "/")
 }
 
 func readSecret(path string) (string, error) {

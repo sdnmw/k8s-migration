@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SKS Migration Center API
-  version: 0.3.0
+  version: 0.4.0
   description: API contract for Kubernetes and Docker Compose migrations to SmartX SKS workload clusters.
   license:
     name: Proprietary
@@ -432,6 +432,40 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AddonInstallation" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/velero/status:
+    get:
+      summary: Inspect the live Velero, node-agent and migration BSL health
+      operationId: getVeleroHealth
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      responses:
+        "200":
+          description: Live health separated from the persisted installation record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VeleroInstallResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+  /addons/{environmentId}/velero/repair:
+    post:
+      summary: Reconcile missing managed Velero resources and the migration BSL in place
+      operationId: repairVeleroAddon
+      parameters:
+        - $ref: "#/components/parameters/EnvironmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddonInstallRequest" }
+      responses:
+        "200":
+          description: Live add-on resources repaired and verified
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VeleroInstallResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
@@ -1717,11 +1751,14 @@ components:
         name: { type: string }
         phase: { type: string, enum: [Unknown, Available, Unavailable] }
         message: { type: string }
+        bucket: { type: string }
+        prefix: { type: string }
+        endpoint: { type: string, format: uri }
         lastValidationTime: { type: string, format: date-time }
     VeleroInstallResult:
       type: object
       additionalProperties: false
-      required: [installation, backupStorageLocation, checks]
+      required: [installation, backupStorageLocation, checks, health, repairable, observedAt]
       properties:
         installation: { $ref: "#/components/schemas/AddonInstallation" }
         backupStorageLocation: { $ref: "#/components/schemas/BackupStorageLocationStatus" }
@@ -1735,6 +1772,9 @@ components:
               name: { type: string }
               status: { type: string, enum: [PASSED, FAILED, WARNING] }
               message: { type: string }
+        health: { type: string, enum: [READY, NEEDS_REPAIR, NOT_INSTALLED, CHECK_FAILED] }
+        repairable: { type: boolean }
+        observedAt: { type: string, format: date-time }
     CreateAssessmentRequest:
       type: object
       additionalProperties: false

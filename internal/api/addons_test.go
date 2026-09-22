@@ -25,6 +25,11 @@ func (s *veleroAddonStub) Install(_ context.Context, input veleroservice.Install
 	return s.result, s.err
 }
 
+func (s *veleroAddonStub) Repair(_ context.Context, input veleroservice.InstallInput) (veleroservice.InstallResult, error) {
+	s.input = input
+	return s.result, s.err
+}
+
 func (s *veleroAddonStub) Reuse(_ context.Context, input veleroservice.ReuseInput) (veleroservice.InstallResult, error) {
 	s.reuse = input
 	return s.result, s.err
@@ -53,6 +58,36 @@ func TestInstallVeleroAddonUsesPathEnvironment(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), `"phase":"Available"`) {
 		t.Fatalf("unexpected body: %s", recorder.Body.String())
+	}
+}
+
+func TestVeleroStatusReturnsLiveHealth(t *testing.T) {
+	environmentID := uuid.New()
+	service := &veleroAddonStub{result: veleroservice.InstallResult{
+		Installation: platform.AddonInstallation{EnvironmentID: environmentID, Type: platform.AddonVelero, Status: platform.InstallationReady},
+		Health:       veleroservice.HealthNeedsRepair,
+		Repairable:   true,
+		Checks:       []veleroservice.Check{{Name: "Velero Server", Status: "FAILED", Message: "Deployment missing"}},
+	}}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/addons/"+environmentID.String()+"/velero/status", nil)
+	request.SetPathValue("environmentId", environmentID.String())
+	recorder := httptest.NewRecorder()
+	veleroStatusHandler(Dependencies{Velero: service}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"health":"NEEDS_REPAIR"`) || !strings.Contains(recorder.Body.String(), `"repairable":true`) {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRepairVeleroUsesSelectedRepository(t *testing.T) {
+	environmentID, profileID := uuid.New(), uuid.New()
+	service := &veleroAddonStub{result: veleroservice.InstallResult{Health: veleroservice.HealthReady}}
+	body := `{"type":"VELERO","objectStorageProfileId":"` + profileID.String() + `","prefix":"shared","kubeletRoot":"/var/lib/kubelet"}`
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/addons/"+environmentID.String()+"/velero/repair", strings.NewReader(body))
+	request.SetPathValue("environmentId", environmentID.String())
+	recorder := httptest.NewRecorder()
+	repairVeleroHandler(Dependencies{Velero: service}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || service.input.EnvironmentID != environmentID || service.input.ObjectStorageProfile != profileID || service.input.Prefix != "shared" {
+		t.Fatalf("status=%d input=%+v body=%s", recorder.Code, service.input, recorder.Body.String())
 	}
 }
 

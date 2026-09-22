@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -112,6 +113,20 @@ func TestRunServiceRetryRequiresTerminalFailureOrCancellation(t *testing.T) {
 	result, err := service.Retry(context.Background(), runs.run.ID)
 	if err != nil || !runs.retry || len(result.Steps) != 7 {
 		t.Fatalf("retry result = %+v, err=%v, retried=%v", result, err, runs.retry)
+	}
+}
+
+func TestRunServiceRetryIsBlockedBeforeSchedulingWhenComponentsNeedRepair(t *testing.T) {
+	plan := domainmigration.Plan{ID: uuid.New(), Status: domainmigration.PlanFailed, Strategy: domainmigration.Strategy{VolumeMode: domainmigration.VolumeFSBackup}}
+	runs := &runRepositoryStub{run: domainmigration.Run{ID: uuid.New(), PlanID: plan.ID, Status: domainmigration.RunFailed}}
+	service, _ := NewRunService(&runPlanRepositoryStub{plan: plan}, runs)
+	service.ConfigureRetryReadinessCheck(func(context.Context, domainmigration.Plan) error { return ErrRetryPrerequisite })
+	_, err := service.Retry(context.Background(), runs.run.ID)
+	if !errors.Is(err, ErrRetryPrerequisite) {
+		t.Fatalf("Retry error = %v, want ErrRetryPrerequisite", err)
+	}
+	if runs.retry {
+		t.Fatal("retry run was scheduled before the readiness gate passed")
 	}
 }
 

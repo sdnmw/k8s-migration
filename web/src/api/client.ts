@@ -81,8 +81,11 @@ export type MinIOSourcePolicy = {
 }
 export type VeleroInstallResult = {
   installation: AddonInstallation
-  backupStorageLocation: { name: string; phase: string; message?: string; lastValidationTime?: string }
+  backupStorageLocation: { name: string; phase: string; message?: string; bucket?: string; prefix?: string; endpoint?: string; lastValidationTime?: string }
   checks: Array<{ name: string; status: 'PASSED' | 'FAILED' | 'WARNING'; message: string }>
+  health: 'READY' | 'NEEDS_REPAIR' | 'NOT_INSTALLED' | 'CHECK_FAILED'
+  repairable: boolean
+  observedAt: string
 }
 
 export type MinIOBootstrapInput = {
@@ -132,6 +135,16 @@ export function listAddonStatuses(environmentId: string) {
 
 export function installVelero(environmentId: string, objectStorageProfileId: string, kubeletRoot = '/var/lib/kubelet', prefix = 'migrations') {
   return request<VeleroInstallResult>(`/addons/${encodeURIComponent(environmentId)}/install`, {
+    method: 'POST', body: JSON.stringify({ type: 'VELERO', objectStorageProfileId, kubeletRoot, prefix }),
+  })
+}
+
+export function getVeleroStatus(environmentId: string) {
+  return request<VeleroInstallResult>(`/addons/${encodeURIComponent(environmentId)}/velero/status`)
+}
+
+export function repairVelero(environmentId: string, objectStorageProfileId: string, kubeletRoot = '/var/lib/kubelet', prefix = 'migrations') {
+  return request<VeleroInstallResult>(`/addons/${encodeURIComponent(environmentId)}/velero/repair`, {
     method: 'POST', body: JSON.stringify({ type: 'VELERO', objectStorageProfileId, kubeletRoot, prefix }),
   })
 }

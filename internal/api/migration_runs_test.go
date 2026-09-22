@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/smartx/sks-migration-center/internal/domain/identity"
 	domainmigration "github.com/smartx/sks-migration-center/internal/domain/migration"
+	migrationservice "github.com/smartx/sks-migration-center/internal/migration"
 	"github.com/smartx/sks-migration-center/internal/repository"
 )
 
@@ -140,6 +142,18 @@ func TestStartCancelAndRetryMigrationRunHandlers(t *testing.T) {
 	retryMigrationRunHandler(Dependencies{MigrationRuns: service}).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusAccepted || service.action != "retry" {
 		t.Fatalf("retry status=%d action=%s", recorder.Code, service.action)
+	}
+}
+
+func TestRetryMigrationRunExplainsComponentReadinessBlock(t *testing.T) {
+	runID := uuid.New()
+	service := &migrationRunServiceStub{err: fmt.Errorf("%w: source Velero needs repair", migrationservice.ErrRetryPrerequisite)}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/migration-runs/id/retry", nil)
+	request.SetPathValue("runId", runID.String())
+	recorder := httptest.NewRecorder()
+	retryMigrationRunHandler(Dependencies{MigrationRuns: service}).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "MIGRATION_RETRY_NOT_READY") {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
 

@@ -5,7 +5,7 @@ import { CloudUploadOutlined, DeleteOutlined, LinkOutlined, PlusOutlined, Reload
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '../components/PageHeader'
 import {
-  adoptManagedMinIO, bootstrapMinIO, connectExternalS3, getMinIOSourcePolicy, installVelero, listAddonStatuses, listEnvironments,
+  adoptManagedMinIO, bootstrapMinIO, connectExternalS3, getMinIOSourcePolicy, getVeleroStatus, installVelero, listAddonStatuses, listEnvironments,
   listObjectStorageProfiles, reuseVelero, testMinIO, type AddonInstallation, type ExternalS3Input, type MinIOAdoptInput, type MinIOBootstrapInput,
   uninstallVelero,
 } from '../api/client'
@@ -38,6 +38,10 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
     queryFn: () => listAddonStatuses(selectedEnvironment!), enabled: !preview && Boolean(selectedEnvironment),
     initialData: preview ? previewAddons : undefined,
   })
+  const veleroHealth = useQuery({
+    queryKey: ['velero-health', selectedEnvironment],
+    queryFn: () => getVeleroStatus(selectedEnvironment!), enabled: !preview && Boolean(selectedEnvironment),
+  })
   const minioStatuses = useQuery({
     queryKey: ['addon-statuses', selectedMinIOEnvironment],
     queryFn: () => listAddonStatuses(selectedMinIOEnvironment!), enabled: !preview && Boolean(selectedMinIOEnvironment),
@@ -66,6 +70,11 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
   }, [minioForm, selectedMinIOEnvironment, targets])
 
   const minioInstallation = minioStatuses.data?.find((value) => value.type === 'MINIO')
+  const statusRows = useMemo(() => (statuses.data ?? []).map((value) => {
+    if (value.type !== 'VELERO' || !veleroHealth.data || veleroHealth.data.health === 'READY') return value
+    const failedCheck = veleroHealth.data.checks.find((check) => check.status === 'FAILED')
+    return { ...value, status: 'FAILED' as const, message: failedCheck?.message ?? '当前集群中的迁移组件需要修复' }
+  }), [statuses.data, veleroHealth.data])
 
   const bootstrap = useMutation({
     mutationFn: bootstrapMinIO,
@@ -111,6 +120,7 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
     onSuccess: async (result) => {
       message.success(`Velero ${result.installation.version} 已就绪，BSL ${result.backupStorageLocation.phase}`)
       await queryClient.invalidateQueries({ queryKey: ['addon-statuses'] })
+      await queryClient.invalidateQueries({ queryKey: ['velero-health'] })
     },
     onError: (error: Error) => message.error(error.message),
   })
@@ -119,6 +129,7 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
     onSuccess: async (result) => {
       message.success(`已复用 Velero ${result.installation.version}，迁移 BSL ${result.backupStorageLocation.phase}`)
       await queryClient.invalidateQueries({ queryKey: ['addon-statuses'] })
+      await queryClient.invalidateQueries({ queryKey: ['velero-health'] })
     },
     onError: (error: Error) => message.error(error.message),
   })
@@ -127,6 +138,7 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
     onSuccess: async () => {
       message.success('Velero Helm release 已卸载，MinIO 数据仍保留')
       await queryClient.invalidateQueries({ queryKey: ['addon-statuses'] })
+      await queryClient.invalidateQueries({ queryKey: ['velero-health'] })
     },
     onError: (error: Error) => message.error(error.message),
   })
@@ -215,9 +227,14 @@ export default function ObjectStoragePage({ preview = false }: { preview?: boole
             </Space>
           </Form>
         </Card>
-        <Card title="组件状态" extra={<Button icon={<ReloadOutlined />} disabled={!selectedEnvironment} onClick={() => statuses.refetch()}>刷新</Button>}>
+        <Card title="组件状态" extra={<Button icon={<ReloadOutlined />} disabled={!selectedEnvironment} onClick={() => { statuses.refetch(); veleroHealth.refetch() }}>刷新</Button>}>
           {!selectedEnvironment && <Text type="secondary">选择集群后显示 MinIO、NFS CSI 和 Velero 状态。</Text>}
-          {selectedEnvironment && <Table rowKey="id" pagination={false} loading={statuses.isLoading} dataSource={statuses.data ?? []} columns={[...addonColumns, {
+          {selectedEnvironment && veleroHealth.data && veleroHealth.data.health !== 'READY' && <Alert
+            className="page-alert" showIcon type={veleroHealth.data?.health === 'CHECK_FAILED' ? 'warning' : 'error'}
+            title={veleroHealth.data?.health === 'NOT_INSTALLED' ? '该集群尚未安装迁移组件' : '当前集群中的迁移组件需要修复'}
+            description={veleroHealth.data?.checks.find((check) => check.status === 'FAILED')?.message ?? '请实时检查 Velero、node-agent 和 migration-minio BSL。'}
+          />}
+          {selectedEnvironment && <Table rowKey="id" pagination={false} loading={statuses.isLoading || veleroHealth.isLoading} dataSource={statusRows} columns={[...addonColumns, {
             title: '操作', key: 'action', render: (_, value: AddonInstallation) => value.type === 'VELERO' && value.status !== 'REMOVED' && value.values?.managed === true
               ? <Popconfirm title="卸载受管 Velero？" description="请先结束迁移和回滚窗口。MinIO 数据与凭证 Secret 将保留。" okText="卸载" cancelText="取消" onConfirm={() => uninstall.mutate(value.environmentId)}><Button danger size="small" icon={<DeleteOutlined />} loading={uninstall.isPending}>卸载</Button></Popconfirm>
               : value.type === 'VELERO' && value.values?.mode === 'REUSED' ? <Tag>外部管理</Tag> : '—',

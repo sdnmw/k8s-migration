@@ -58,7 +58,17 @@ type InstallResult struct {
 	Installation platform.AddonInstallation                `json:"installation"`
 	Location     veleroadapter.BackupStorageLocationStatus `json:"backupStorageLocation"`
 	Checks       []Check                                   `json:"checks"`
+	Health       string                                    `json:"health"`
+	Repairable   bool                                      `json:"repairable"`
+	ObservedAt   time.Time                                 `json:"observedAt"`
 }
+
+const (
+	HealthReady        = "READY"
+	HealthNeedsRepair  = "NEEDS_REPAIR"
+	HealthNotInstalled = "NOT_INSTALLED"
+	HealthCheckFailed  = "CHECK_FAILED"
+)
 
 type Check struct {
 	Name    string `json:"name"`
@@ -177,14 +187,14 @@ func (s *Service) Reuse(ctx context.Context, input ReuseInput) (InstallResult, e
 		Status: platform.InstallationReady, CreatedAt: now, UpdatedAt: now,
 		Values: map[string]any{
 			"managed": false, "mode": "REUSED", "serverImage": existing.ServerImage, "nodeAgentImage": existing.NodeAgentImage,
-			"objectStorageProfileId": profile.ID.String(), "backupStorageLocation": BackupLocationName,
+			"objectStorageProfileId": profile.ID.String(), "backupStorageLocation": BackupLocationName, "prefix": input.Prefix,
 		},
 		Message: "复用集群已有 Velero 和 node-agent；迁移专用 MinIO BSL 已就绪",
 	}
 	if err := s.platform.UpsertAddonInstallation(ctx, installation); err != nil {
 		return InstallResult{}, err
 	}
-	return InstallResult{Installation: installation, Location: location, Checks: []Check{
+	return InstallResult{Installation: installation, Location: location, Health: HealthReady, ObservedAt: s.clock(), Checks: []Check{
 		{Name: "Velero Server", Status: "PASSED", Message: "已连接集群现有 Velero"},
 		{Name: "Node Agent", Status: "PASSED", Message: "已发现集群现有 node-agent"},
 		{Name: "Backup Storage Location", Status: "PASSED", Message: "迁移专用 MinIO BSL 状态为 Available"},
@@ -255,7 +265,7 @@ func (s *Service) Install(ctx context.Context, input InstallInput) (InstallResul
 		Status: platform.InstallationInstalling, CreatedAt: now, UpdatedAt: now,
 		Values: map[string]any{
 			"managed": true, "chartVersion": OfficialChartVersion, "awsPluginVersion": AWSPluginVersion, "objectStorageProfileId": profile.ID.String(),
-			"backupStorageLocation": BackupLocationName, "nodeAgent": true, "kubeletRoot": input.KubeletRoot,
+			"backupStorageLocation": BackupLocationName, "nodeAgent": true, "kubeletRoot": input.KubeletRoot, "prefix": input.Prefix,
 		},
 	}
 	if err := s.platform.UpsertAddonInstallation(ctx, installation); err != nil {
@@ -337,7 +347,7 @@ func (s *Service) Install(ctx context.Context, input InstallInput) (InstallResul
 	if err := s.platform.UpsertAddonInstallation(ctx, installation); err != nil {
 		return InstallResult{}, err
 	}
-	return InstallResult{Installation: installation, Location: location, Checks: []Check{
+	return InstallResult{Installation: installation, Location: location, Health: HealthReady, ObservedAt: s.clock(), Checks: []Check{
 		{Name: "Velero Server", Status: "PASSED", Message: "Velero 1.18.1 Deployment 已就绪"},
 		{Name: "Node Agent", Status: "PASSED", Message: "Kopia node-agent 已按节点部署"},
 		{Name: "Backup Storage Location", Status: "PASSED", Message: "MinIO BSL 状态为 Available"},
@@ -345,12 +355,22 @@ func (s *Service) Install(ctx context.Context, input InstallInput) (InstallResul
 }
 
 func (s *Service) Status(ctx context.Context, environmentID uuid.UUID) (InstallResult, error) {
+	observedAt := s.clock()
 	installation, err := s.platform.GetAddonInstallation(ctx, environmentID, platform.AddonVelero)
+	if errors.Is(err, repository.ErrNotFound) {
+		return InstallResult{
+			Health: HealthNotInstalled, Repairable: true, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "尚未安装迁移专用 Velero"},
+			Checks:   []Check{{Name: "Velero", Status: "FAILED", Message: "该环境没有 Velero 安装记录；可直接安装，无需删除并重新添加环境"}},
+		}, nil
+	}
 	if err != nil {
 		return InstallResult{}, err
 	}
 	if installation.Status == platform.InstallationRemoved {
-		return InstallResult{Installation: installation, Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "Velero is uninstalled"}}, nil
+		return InstallResult{Installation: installation, Health: HealthNotInstalled, Repairable: true, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "Velero 已卸载"},
+			Checks:   []Check{{Name: "Velero", Status: "FAILED", Message: "迁移组件已卸载；可在当前环境原地重新安装"}}}, nil
 	}
 	environment, err := s.environments.Get(ctx, environmentID)
 	if err != nil {
@@ -364,11 +384,79 @@ func (s *Service) Status(ctx context.Context, environmentID uuid.UUID) (InstallR
 		return InstallResult{}, err
 	}
 	defer clearBytes(kubeconfig)
+	existing, err := s.cluster.InspectVeleroInstallation(ctx, kubeconfig, Namespace)
+	if err != nil {
+		return InstallResult{Installation: installation, Health: HealthCheckFailed, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "无法检查集群中的 Velero"},
+			Checks:   []Check{{Name: "集群检查", Status: "FAILED", Message: err.Error()}}}, nil
+	}
+	checks := make([]Check, 0, 3)
+	repairable := installation.Values["managed"] == true
+	if !existing.Exists || strings.TrimSpace(existing.ServerImage) == "" {
+		checks = append(checks, Check{Name: "Velero Server", Status: "FAILED", Message: "集群中未找到 Velero Deployment；历史安装记录不会被当作当前就绪状态"})
+		return InstallResult{Installation: installation, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "Velero Deployment 缺失"}, Checks: checks}, nil
+	}
+	checks = append(checks, Check{Name: "Velero Server", Status: "PASSED", Message: "已发现 " + existing.ServerImage})
+	if strings.TrimSpace(existing.NodeAgentImage) == "" {
+		checks = append(checks, Check{Name: "Node Agent", Status: "FAILED", Message: "集群中未找到 node-agent DaemonSet，卷数据迁移不可用"})
+		return InstallResult{Installation: installation, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "node-agent 缺失"}, Checks: checks}, nil
+	}
+	checks = append(checks, Check{Name: "Node Agent", Status: "PASSED", Message: "已发现 " + existing.NodeAgentImage})
+	// A complete externally managed Velero can be repaired by recreating only
+	// the migration Secret and BSL. The service never takes Helm ownership.
+	repairable = true
 	location, err := s.cr.BackupStorageLocationStatus(ctx, kubeconfig, Namespace, BackupLocationName)
+	if err != nil {
+		checks = append(checks, Check{Name: "Backup Storage Location", Status: "FAILED", Message: "迁移专用 BSL migration-minio 不存在或无法读取：" + err.Error()})
+		return InstallResult{Installation: installation, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt,
+			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "迁移专用 BSL 缺失"}, Checks: checks}, nil
+	}
+	if location.Phase != "Available" {
+		checks = append(checks, Check{Name: "Backup Storage Location", Status: "FAILED", Message: "migration-minio 当前状态为 " + location.Phase + "：" + location.Message})
+		return InstallResult{Installation: installation, Location: location, Checks: checks, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt}, nil
+	}
+	if profileID, ok := stringValue(installation.Values, "objectStorageProfileId"); ok {
+		profileUUID, parseErr := uuid.Parse(profileID)
+		profile, profileErr := s.platform.GetObjectStorageProfile(ctx, profileUUID)
+		expectedPrefix, hasExpectedPrefix := stringValue(installation.Values, "prefix")
+		if parseErr != nil || profileErr != nil {
+			checks = append(checks, Check{Name: "仓库配置", Status: "FAILED", Message: "历史安装记录引用的对象存储配置不存在或无效"})
+			return InstallResult{Installation: installation, Location: location, Checks: checks, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt}, nil
+		}
+		endpointMatches := strings.TrimRight(location.Endpoint, "/") == strings.TrimRight(profile.Endpoint, "/")
+		prefixMatches := !hasExpectedPrefix || strings.Trim(location.Prefix, "/") == strings.Trim(expectedPrefix, "/")
+		if !endpointMatches || location.Bucket != profile.Bucket || !prefixMatches {
+			checks = append(checks, Check{Name: "仓库配置", Status: "FAILED", Message: fmt.Sprintf(
+				"migration-minio 与安装意图不一致：当前 %s/%s/%s，期望 %s/%s/%s",
+				location.Endpoint, location.Bucket, location.Prefix, profile.Endpoint, profile.Bucket, expectedPrefix,
+			)})
+			return InstallResult{Installation: installation, Location: location, Checks: checks, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt}, nil
+		}
+	}
+	checks = append(checks, Check{Name: "Backup Storage Location", Status: "PASSED", Message: "migration-minio 已连接 " + location.Endpoint + "/" + location.Bucket + "/" + location.Prefix})
+	return InstallResult{Installation: installation, Location: location, Checks: checks, Health: HealthReady, ObservedAt: observedAt}, nil
+}
+
+// Repair reconciles the live cluster with the persisted add-on intent. Managed
+// installations are re-applied with Helm; reused installations only recreate
+// the migration Secret and BackupStorageLocation and never take ownership of
+// the external Velero release.
+func (s *Service) Repair(ctx context.Context, input InstallInput) (InstallResult, error) {
+	installation, err := s.platform.GetAddonInstallation(ctx, input.EnvironmentID, platform.AddonVelero)
+	if errors.Is(err, repository.ErrNotFound) || installation.Status == platform.InstallationRemoved || installation.Values["managed"] == true {
+		return s.Install(ctx, input)
+	}
 	if err != nil {
 		return InstallResult{}, err
 	}
-	return InstallResult{Installation: installation, Location: location}, nil
+	return s.Reuse(ctx, ReuseInput{EnvironmentID: input.EnvironmentID, ObjectStorageProfile: input.ObjectStorageProfile, Prefix: input.Prefix})
+}
+
+func stringValue(values map[string]any, key string) (string, bool) {
+	value, ok := values[key].(string)
+	return strings.TrimSpace(value), ok
 }
 
 func (s *Service) waitForLocation(ctx context.Context, kubeconfig []byte, current veleroadapter.BackupStorageLocationStatus) (veleroadapter.BackupStorageLocationStatus, error) {

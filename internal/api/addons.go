@@ -15,9 +15,30 @@ import (
 
 type VeleroAddonService interface {
 	Install(context.Context, veleroservice.InstallInput) (veleroservice.InstallResult, error)
+	Repair(context.Context, veleroservice.InstallInput) (veleroservice.InstallResult, error)
 	Reuse(context.Context, veleroservice.ReuseInput) (veleroservice.InstallResult, error)
 	Status(context.Context, uuid.UUID) (veleroservice.InstallResult, error)
 	Uninstall(context.Context, uuid.UUID) (platform.AddonInstallation, error)
+}
+
+func veleroStatusHandler(deps Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if deps.Velero == nil {
+			writeInternalProblem(w)
+			return
+		}
+		environmentID, err := uuid.Parse(r.PathValue("environmentId"))
+		if err != nil {
+			writeAddonProblem(w, http.StatusBadRequest, "ADDON_INVALID", "environmentId 必须是有效的 UUID。")
+			return
+		}
+		result, err := deps.Velero.Status(r.Context(), environmentID)
+		if err != nil {
+			writeAddonError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	}
 }
 
 type addonInstallRequest struct {
@@ -117,6 +138,39 @@ func installAddonHandler(deps Dependencies) http.HandlerFunc {
 			"version": result.Installation.Version, "backupStorageLocation": result.Location.Name,
 		})
 		writeJSON(w, http.StatusCreated, result)
+	}
+}
+
+func repairVeleroHandler(deps Dependencies) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if deps.Velero == nil {
+			writeInternalProblem(w)
+			return
+		}
+		environmentID, err := uuid.Parse(r.PathValue("environmentId"))
+		if err != nil {
+			writeAddonProblem(w, http.StatusBadRequest, "ADDON_INVALID", "environmentId 必须是有效的 UUID。")
+			return
+		}
+		var input addonInstallRequest
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil || input.Type != "VELERO" || input.ObjectStorageProfileID == uuid.Nil {
+			writeAddonProblem(w, http.StatusBadRequest, "ADDON_INVALID", "当前仅支持 type=VELERO，且 objectStorageProfileId 必填。")
+			return
+		}
+		result, err := deps.Velero.Repair(r.Context(), veleroservice.InstallInput{
+			EnvironmentID: environmentID, ObjectStorageProfile: input.ObjectStorageProfileID, Prefix: input.Prefix, KubeletRoot: input.KubeletRoot,
+		})
+		if err != nil {
+			writeAddonError(w, err)
+			auditAddon(deps, r, "addon.velero.repair", environmentID, "FAILURE", nil)
+			return
+		}
+		auditAddon(deps, r, "addon.velero.repair", environmentID, "SUCCESS", map[string]any{
+			"version": result.Installation.Version, "backupStorageLocation": result.Location.Name,
+		})
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 
