@@ -36,7 +36,7 @@ cd sks-migration-center-0.2.0
 当前发行归档 SHA-256：
 
 ```text
-4e823908a8c3f9bb388c893a2d79a79cf5f6cf2b30c28729fbfcf926702ff3b4
+457130ecef2c48465d9313406c0999d4dbf8c575670c57c43b418fbefbdf8778
 ```
 
 ### 3. 准备凭据文件
@@ -107,7 +107,7 @@ kubectl --kubeconfig /secure/sks-migration/target-sks.yaml \
   -n sks-migration-center rollout status deployment/sks-migration-center-web
 ```
 
-更完整的离线包组装、Harbor 导入、对象存储和升级说明见 [`deploy/offline/README.md`](./deploy/offline/README.md)，迁移故障处理见 [`docs/operations/migration-failure-lessons.md`](./docs/operations/migration-failure-lessons.md)。
+更完整的离线包组装、Harbor 导入、对象存储和升级说明见 [`deploy/offline/README.md`](./deploy/offline/README.md)，迁移故障处理见 [`docs/operations/migration-failure-lessons.md`](./docs/operations/migration-failure-lessons.md)，NFS 卷迁移实测步骤与截图见 [`NFS_MIGRATION_GUIDE.md`](./NFS_MIGRATION_GUIDE.md)。
 
 ## 第二部分：迁移逻辑
 

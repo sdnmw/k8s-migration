@@ -590,6 +590,21 @@ func mappingChangesForNode(source domainmigration.TopologyNode, target *domainmi
 			target.Attributes["storageClass"] = to
 		}
 	}
+	if source.Kind == "StorageClass" {
+		from := source.Name
+		to := mappedValue(from, profile.Storage)
+		explicit := false
+		for _, item := range profile.Storage {
+			if item.Source == from {
+				explicit = true
+				break
+			}
+		}
+		if from != "" && (from != to || explicit) {
+			changes = append(changes, domainmigration.MappingChange{Type: "STORAGE_CLASS", Path: "metadata.name", SourceValue: from, TargetValue: to, Changed: true})
+			target.Name = to
+		}
+	}
 	if source.Kind == "Ingress" {
 		from, _ := source.Attributes["ingressClass"].(string)
 		to := mappedValue(from, profile.Ingress)
@@ -944,6 +959,9 @@ func mappingAppearsApplied(change domainmigration.MappingChange, node domainmigr
 	case "NAMESPACE":
 		return node.Namespace == change.TargetValue
 	case "STORAGE_CLASS":
+		if node.Kind == "StorageClass" {
+			return node.Name == change.TargetValue
+		}
 		value, _ := node.Attributes["storageClass"].(string)
 		return value == change.TargetValue
 	case "INGRESS_CLASS":

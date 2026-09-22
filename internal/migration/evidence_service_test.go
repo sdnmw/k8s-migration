@@ -137,6 +137,45 @@ func TestKubernetesTopologyShowsExplicitSameNameStorageClassMapping(t *testing.T
 	}
 }
 
+func TestKubernetesTopologyMapsStorageClassDependencyToTargetClass(t *testing.T) {
+	sourceClassID := topologyNodeID("SOURCE", "storage.k8s.io/v1", "StorageClass", "", "legacy-nfs")
+	sourcePVCID := topologyNodeID("SOURCE", "v1", "PersistentVolumeClaim", "demo", "data")
+	source := domainmigration.TopologyGraph{Name: "sida", Type: "KUBERNETES", Namespace: "demo", Nodes: []domainmigration.TopologyNode{
+		{ID: sourceClassID, Side: "SOURCE", APIVersion: "storage.k8s.io/v1", Kind: "StorageClass", Name: "legacy-nfs", Required: true, Status: domainmigration.ResourceDiscovered},
+		{ID: sourcePVCID, Side: "SOURCE", APIVersion: "v1", Kind: "PersistentVolumeClaim", Namespace: "demo", Name: "data", Required: true, Status: domainmigration.ResourceDiscovered, Attributes: map[string]any{"storageClass": "legacy-nfs"}},
+	}, Edges: []domainmigration.TopologyEdge{{ID: "uses-sc", From: sourcePVCID, To: sourceClassID, Relation: "USES_STORAGE_CLASS", Required: true}}}
+
+	target, mappings := buildKubernetesTarget(source, domainmapping.Profile{Storage: []domainmapping.KeyValue{{Source: "legacy-nfs", Target: "shared-nfs"}}}, "mw")
+	if !hasTopologyResource(target.Nodes, "StorageClass", "shared-nfs") || hasTopologyResource(target.Nodes, "StorageClass", "legacy-nfs") {
+		t.Fatalf("target StorageClass dependency was not mapped: %+v", target.Nodes)
+	}
+	targetClassID := topologyNodeID("TARGET", "storage.k8s.io/v1", "StorageClass", "", "shared-nfs")
+	if len(target.Edges) != 1 || target.Edges[0].To != targetClassID {
+		t.Fatalf("PVC dependency does not point at the mapped StorageClass: %+v", target.Edges)
+	}
+	found := false
+	for _, mapping := range mappings {
+		if mapping.SourceNodeID != sourceClassID || mapping.TargetNodeID != targetClassID {
+			continue
+		}
+		found = len(mapping.Changes) == 1 && mapping.Changes[0].Type == "STORAGE_CLASS" && mapping.Changes[0].TargetValue == "shared-nfs"
+	}
+	if !found {
+		t.Fatalf("StorageClass mapping evidence missing: %+v", mappings)
+	}
+
+	observed := domainmigration.TopologyGraph{Nodes: []domainmigration.TopologyNode{{ID: targetClassID, Side: "TARGET", APIVersion: "storage.k8s.io/v1", Kind: "StorageClass", Name: "shared-nfs"}}}
+	merged, drifted := mergeObservedTopology(target, observed, domainmigration.RunCompleted)
+	for _, node := range merged.Nodes {
+		if node.Kind == "StorageClass" && (node.Status != domainmigration.ResourceSucceeded || node.MappingChanges[0].Applied == nil || !*node.MappingChanges[0].Applied) {
+			t.Fatalf("mapped StorageClass must validate against its target name: %+v", node)
+		}
+	}
+	if drifted != 1 { // The PVC is intentionally absent from this focused observation.
+		t.Fatalf("unexpected drift count: %d", drifted)
+	}
+}
+
 func TestObservedTopologyMarksMissingAndUnappliedMappings(t *testing.T) {
 	targetID := topologyNodeID("TARGET", "apps/v1", "Deployment", "shop-new", "api")
 	expected := domainmigration.TopologyGraph{Name: "mw", Type: "KUBERNETES", Namespace: "shop-new", Nodes: []domainmigration.TopologyNode{{
