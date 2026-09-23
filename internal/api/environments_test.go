@@ -14,12 +14,34 @@ import (
 	"github.com/smartx/sks-migration-center/internal/auth"
 	domainenvironment "github.com/smartx/sks-migration-center/internal/domain/environment"
 	environmentservice "github.com/smartx/sks-migration-center/internal/environment"
+	"github.com/smartx/sks-migration-center/internal/repository"
 )
 
 type stubEnvironmentService struct {
 	created environmentservice.CreateInput
 	value   domainenvironment.Environment
 	err     error
+}
+
+func TestDeleteEnvironmentExplainsMigrationPlanReference(t *testing.T) {
+	service := &stubEnvironmentService{err: repository.ErrConflict}
+	mux := http.NewServeMux()
+	mux.HandleFunc("DELETE /api/v1/environments/{environmentId}", deleteEnvironmentHandler(Dependencies{Environments: service}))
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/environments/"+uuid.NewString(), nil)
+	recorder := httptest.NewRecorder()
+
+	mux.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	var value problem
+	if err := json.NewDecoder(recorder.Body).Decode(&value); err != nil {
+		t.Fatal(err)
+	}
+	if value.Code != "ENVIRONMENT_IN_USE" || !strings.Contains(value.Detail, "迁移计划引用") {
+		t.Fatalf("unexpected problem response: %+v", value)
+	}
 }
 
 func (s *stubEnvironmentService) Create(_ context.Context, input environmentservice.CreateInput) (domainenvironment.Environment, error) {

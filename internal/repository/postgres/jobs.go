@@ -281,10 +281,30 @@ func (r *JobRepository) Fail(ctx context.Context, leaseID uuid.UUID, ownerID str
 	var status migration.RunStatus
 	var planID uuid.UUID
 	var stepType migration.StepType
-	if err := tx.QueryRow(ctx, `SELECT r.status,r.migration_plan_id,s.type FROM migration_runs r JOIN migration_steps s ON s.id=$2 WHERE r.id=$1 FOR UPDATE OF r`, runID, stepID).Scan(&status, &planID, &stepType); err != nil {
+	var runErrorCode string
+	if err := tx.QueryRow(ctx, `SELECT r.status,r.migration_plan_id,s.type,r.error_code FROM migration_runs r JOIN migration_steps s ON s.id=$2 WHERE r.id=$1 FOR UPDATE OF r`, runID, stepID).Scan(&status, &planID, &stepType, &runErrorCode); err != nil {
 		return fmt.Errorf("read failed migration run: %w", err)
 	}
-	if stepType == migration.StepRollback || !migration.RequiresRollback(status) {
+	if stepType == migration.StepRollback && runErrorCode == "SOURCE_RESTORE_REQUESTED" {
+		// Restoring the source after a completed cutover is an operator-requested,
+		// post-migration action. Its failure must remain visible, but it must not
+		// invalidate the already verified target migration.
+		if err := migration.ValidateTransition(status, migration.RunCompleted); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE migration_runs SET status='COMPLETED',progress=100,completed_at=now(),
+			error_code='SOURCE_RESTORE_FAILED',error_message=$2,updated_at=now() WHERE id=$1`, runID, message); err != nil {
+			return fmt.Errorf("complete migration with source restoration warning: %w", err)
+		}
+		if _, err := tx.Exec(ctx, "UPDATE migration_plans SET status='COMPLETED',updated_at=now() WHERE id=$1", planID); err != nil {
+			return fmt.Errorf("complete migration plan after source restoration warning: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO migration_events
+			(migration_run_id,type,severity,message,detail) VALUES ($1,'SOURCE_RESTORE_FAILED','WARNING',$2,
+			jsonb_build_object('stepId',$3::text,'stepType',$4::text))`, runID, message, stepID, stepType); err != nil {
+			return fmt.Errorf("record source restoration failure: %w", err)
+		}
+	} else if stepType == migration.StepRollback || !migration.RequiresRollback(status) {
 		if err := migration.ValidateTransition(status, migration.RunFailed); err != nil {
 			return err
 		}

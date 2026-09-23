@@ -112,13 +112,27 @@ func deleteEnvironmentHandler(deps Dependencies) http.HandlerFunc {
 			return
 		}
 		if err := deps.Environments.Delete(r.Context(), id); err != nil {
-			writeEnvironmentError(w, err)
+			writeDeleteEnvironmentError(w, err)
 			auditEnvironment(deps, r, "environment.delete", &id, "FAILURE", nil)
 			return
 		}
 		auditEnvironment(deps, r, "environment.delete", &id, "SUCCESS", nil)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+func writeDeleteEnvironmentError(w http.ResponseWriter, err error) {
+	if errors.Is(err, repository.ErrConflict) {
+		writeProblem(w, problem{
+			Type:   "/problems/environment-in-use",
+			Title:  "Environment is in use",
+			Status: http.StatusConflict,
+			Detail: "该环境仍被迁移计划引用，不能删除。修复 Velero 等迁移组件不需要删除环境；确需删除时，请先删除相关迁移任务和计划。",
+			Code:   "ENVIRONMENT_IN_USE",
+		})
+		return
+	}
+	writeEnvironmentError(w, err)
 }
 
 func testEnvironmentHandler(deps Dependencies) http.HandlerFunc {

@@ -185,7 +185,7 @@ export default function MigrationRunDetailPage({ preview = false }: { preview?: 
     {actionError && <Alert className="page-alert" showIcon type="error" title="操作失败" description={actionError} />}
     <Card className="section-card run-evidence-summary" variant="outlined">
       <div className="run-evidence-metrics">
-        <Statistic title="任务结果" value={historicalFailureCurrentlyHealthy ? '迁移成功' : snapshot.run.status === 'COMPLETED' && snapshot.run.errorCode === 'SOURCE_RESTORED' ? '迁移成功，源端已恢复' : statusLabels[snapshot.run.status]} styles={{ content: { fontSize: 22 } }} />
+        <Statistic title="任务结果" value={historicalFailureCurrentlyHealthy ? '迁移成功' : snapshot.run.status === 'COMPLETED' && snapshot.run.errorCode === 'SOURCE_RESTORED' ? '迁移成功，源端已恢复' : snapshot.run.status === 'COMPLETED' && snapshot.run.errorCode === 'SOURCE_RESTORE_FAILED' ? '迁移成功，源端恢复失败' : statusLabels[snapshot.run.status]} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="步骤执行完成度" value={finishedSteps} suffix={`/ ${snapshot.steps.length}`} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="目标当前正常资源" value={currentSucceeded} suffix={`/ ${requiredTargetNodes.length}`} styles={{ content: { fontSize: 22 } }} />
         <Statistic title="当前失败 / 缺失" value={currentFailedOrMissing} styles={{ content: { fontSize: 22 } }} />
@@ -211,6 +211,7 @@ function RunAlert({ status, errorCode, error, historicalFailureCurrentlyHealthy,
   if (status === 'FAILED' && historicalFailureCurrentlyHealthy) return <Alert className="page-alert" showIcon type="success" title="迁移成功" description={`目标必需资源 ${currentSucceeded}/${currentTotal} 已通过复检（${formatTime(observedAt)}）。`} />
   if (status === 'FAILED') return <Alert className="page-alert" showIcon type="error" title="迁移执行失败" description={error || '查看执行时序定位失败步骤；目标当前状态请以资源拓扑的最近检查结果为准。'} />
   if (status === 'COMPLETED' && errorCode === 'SOURCE_RESTORED') return <Alert className="page-alert" showIcon type="success" title="迁移成功，源端已恢复" description="目标资源已通过验证；源业务已重新启动，外部流量需按实际方案人工确认。" />
+  if (status === 'COMPLETED' && errorCode === 'SOURCE_RESTORE_FAILED') return <Alert className="page-alert" showIcon type="warning" title="迁移成功，源端恢复失败" description={error || '目标应用和必需资源已通过验证，但后续恢复源端业务失败。请检查源端环境后再次恢复；目标迁移结论不受影响。'} />
   if (status === 'CANCELLED') return <Alert className="page-alert" showIcon type="info" title="迁移已取消" description="源业务未停机，或已完成恢复。可以创建新的重试任务。" />
   if (status === 'COMPLETED') return <Alert className="page-alert" showIcon type="success" title="迁移成功" description="目标应用和必需资源已通过验证。" />
   return <Alert className="page-alert" showIcon type="info" title={statusLabels[status]} description="页面刷新或服务重启不会丢失进度；事件由数据库游标继续读取。" />

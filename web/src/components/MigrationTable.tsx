@@ -7,6 +7,7 @@ const statusClass: Record<MigrationStatusLabel, string> = {
   '迁移中': 'status-running',
   '等待切流': 'status-attention',
   '成功': 'status-success',
+  '成功有告警': 'status-attention',
   '源端已恢复': 'status-attention',
   '需要处理': 'status-error',
 }

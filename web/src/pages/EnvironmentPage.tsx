@@ -183,7 +183,7 @@ export default function EnvironmentPage({ role, preview = false }: { role: Envir
           <Button type="link" icon={<ReloadOutlined />} loading={testingID === record.id} onClick={() => testMutation.mutate(record.id)}>测试连接</Button>
           {role === 'SOURCE' && <Button type="link" icon={<ApartmentOutlined />} loading={record.kind === 'DOCKER_COMPOSE' && discoveringID === record.id} onClick={() => record.kind === 'KUBERNETES' ? setInventoryEnvironment(record) : composeDiscoveryMutation.mutate(record.id)}>发现应用</Button>}
           <Button type="link" icon={<RadarChartOutlined />} loading={record.kind === 'KUBERNETES' && discoveringID === record.id} onClick={() => discoveryMutation.mutate(record.id)}>能力发现</Button>
-          <Popconfirm title="删除环境？" description="环境专用连接凭证也会永久删除。" okText="删除" cancelText="取消" onConfirm={() => deleteMutation.mutate(record.id)}>
+          <Popconfirm title="删除环境？" description="仍被迁移任务引用的环境不能删除；修复迁移组件不需要删除环境。删除后环境专用连接凭证也会永久删除。" okText="删除" cancelText="取消" onConfirm={() => deleteMutation.mutate(record.id)}>
             <Tooltip title="删除"><Button type="text" danger aria-label={`删除 ${record.name}`} icon={<DeleteOutlined />} /></Tooltip>
           </Popconfirm>
         </Space>

@@ -1,6 +1,6 @@
 import type { MigrationRunStatus, MigrationRunSummary } from '../api/client'
 
-export type MigrationStatusLabel = '迁移中' | '等待切流' | '成功' | '源端已恢复' | '需要处理'
+export type MigrationStatusLabel = '迁移中' | '等待切流' | '成功' | '成功有告警' | '源端已恢复' | '需要处理'
 
 export type MigrationRow = {
   key: string
@@ -40,6 +40,7 @@ export function isActiveStatus(status: MigrationRunStatus) {
 
 function statusLabel(value: MigrationRunSummary): MigrationStatusLabel {
   const status = value.status
+  if (status === 'COMPLETED' && value.errorCode === 'SOURCE_RESTORE_FAILED') return '成功有告警'
   if (status === 'COMPLETED') return '成功'
   if (status === 'AWAITING_CUTOVER') return '等待切流'
   if (status === 'CANCELLED' && value.errorCode === 'SOURCE_RESTORE_REQUESTED') return '源端已恢复'

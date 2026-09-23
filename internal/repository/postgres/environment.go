@@ -91,6 +91,14 @@ func (r *EnvironmentRepository) Update(ctx context.Context, value environment.En
 }
 
 func (r *EnvironmentRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	var referenceCount int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM migration_plans
+		WHERE source_environment_id=$1 OR target_environment_id=$1`, id).Scan(&referenceCount); err != nil {
+		return fmt.Errorf("count environment migration plan references: %w", err)
+	}
+	if referenceCount > 0 {
+		return fmt.Errorf("%w: environment is referenced by %d migration plan(s)", repository.ErrConflict, referenceCount)
+	}
 	command, err := r.pool.Exec(ctx, "DELETE FROM environments WHERE id=$1", id)
 	if err != nil {
 		return mapError(err)
