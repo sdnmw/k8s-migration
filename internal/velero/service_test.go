@@ -207,6 +207,45 @@ func TestStatusDoesNotTrustStaleReadyRecordWhenVeleroWasDeleted(t *testing.T) {
 	}
 }
 
+func TestRepairTakesOverWhenReusedVeleroWasCompletelyDeleted(t *testing.T) {
+	environmentID, kubeconfigID, profileID, s3ID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	store := &fakePlatformRepository{
+		profile: platform.ObjectStorageProfile{
+			ID: profileID, Endpoint: "https://minio.example.test", Bucket: "velero", Region: "minio", CredentialID: s3ID,
+		},
+		installation: platform.AddonInstallation{
+			ID: uuid.New(), EnvironmentID: environmentID, Type: platform.AddonVelero, Version: "1.13.2",
+			Status: platform.InstallationReady, Values: map[string]any{"managed": false, "mode": "REUSED"},
+		},
+	}
+	credentialJSON, _ := json.Marshal(objectstorage.Credential{AccessKey: "access", SecretKey: "secret"})
+	manager := &fakeManager{}
+	service, err := NewService(store, &fakeEnvironmentRepository{value: domainenvironment.Environment{
+		ID: environmentID, Kind: domainenvironment.KindKubernetes, Role: domainenvironment.RoleSource,
+		Status: domainenvironment.StatusConnected, CredentialID: &kubeconfigID,
+	}}, &fakeVault{values: map[uuid.UUID][]byte{kubeconfigID: []byte("kubeconfig"), s3ID: credentialJSON}},
+		manager, &fakeCluster{}, &fakeCR{}, Images{Velero: veleroImage, AWS: pluginImage})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := service.Status(context.Background(), environmentID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Health != HealthNeedsRepair || !status.Repairable {
+		t.Fatalf("deleted reused installation should be repairable: %+v", status)
+	}
+	result, err := service.Repair(context.Background(), InstallInput{
+		EnvironmentID: environmentID, ObjectStorageProfile: profileID, Prefix: "shared",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Installation.Values["managed"] != true || manager.request.ReleaseName != ReleaseName {
+		t.Fatalf("repair did not install the managed release: result=%+v request=%+v", result, manager.request)
+	}
+}
+
 func TestStatusDetectsRepositoryDrift(t *testing.T) {
 	environmentID, kubeconfigID, profileID := uuid.New(), uuid.New(), uuid.New()
 	store := &fakePlatformRepository{

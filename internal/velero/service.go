@@ -393,6 +393,11 @@ func (s *Service) Status(ctx context.Context, environmentID uuid.UUID) (InstallR
 	checks := make([]Check, 0, 3)
 	repairable := installation.Values["managed"] == true
 	if !existing.Exists || strings.TrimSpace(existing.ServerImage) == "" {
+		// If the reused installation has disappeared completely there is no
+		// external release left to protect. It is safe for the migration center
+		// to take ownership and install its pinned Velero release in place. This
+		// preserves the environment ID and all historical migration references.
+		repairable = !existing.Exists || repairable
 		checks = append(checks, Check{Name: "Velero Server", Status: "FAILED", Message: "集群中未找到 Velero Deployment；历史安装记录不会被当作当前就绪状态"})
 		return InstallResult{Installation: installation, Health: HealthNeedsRepair, Repairable: repairable, ObservedAt: observedAt,
 			Location: veleroadapter.BackupStorageLocationStatus{Name: BackupLocationName, Phase: "Unknown", Message: "Velero Deployment 缺失"}, Checks: checks}, nil
@@ -440,9 +445,10 @@ func (s *Service) Status(ctx context.Context, environmentID uuid.UUID) (InstallR
 }
 
 // Repair reconciles the live cluster with the persisted add-on intent. Managed
-// installations are re-applied with Helm; reused installations only recreate
-// the migration Secret and BackupStorageLocation and never take ownership of
-// the external Velero release.
+// installations are re-applied with Helm. A reused installation is normally
+// repaired without taking ownership, but when it has disappeared completely
+// the service safely installs the pinned managed release in the same
+// environment instead of forcing users to delete and recreate that environment.
 func (s *Service) Repair(ctx context.Context, input InstallInput) (InstallResult, error) {
 	installation, err := s.platform.GetAddonInstallation(ctx, input.EnvironmentID, platform.AddonVelero)
 	if errors.Is(err, repository.ErrNotFound) || installation.Status == platform.InstallationRemoved || installation.Values["managed"] == true {
@@ -450,6 +456,25 @@ func (s *Service) Repair(ctx context.Context, input InstallInput) (InstallResult
 	}
 	if err != nil {
 		return InstallResult{}, err
+	}
+	environment, err := s.environments.Get(ctx, input.EnvironmentID)
+	if err != nil {
+		return InstallResult{}, err
+	}
+	if environment.CredentialID == nil {
+		return InstallResult{}, fmt.Errorf("%w: environment kubeconfig is unavailable", ErrInvalidInput)
+	}
+	kubeconfig, err := s.vault.Resolve(ctx, *environment.CredentialID)
+	if err != nil {
+		return InstallResult{}, err
+	}
+	defer clearBytes(kubeconfig)
+	existing, err := s.cluster.InspectVeleroInstallation(ctx, kubeconfig, Namespace)
+	if err != nil {
+		return InstallResult{}, err
+	}
+	if !existing.Exists {
+		return s.Install(ctx, input)
 	}
 	return s.Reuse(ctx, ReuseInput{EnvironmentID: input.EnvironmentID, ObjectStorageProfile: input.ObjectStorageProfile, Prefix: input.Prefix})
 }
