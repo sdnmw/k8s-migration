@@ -85,6 +85,23 @@ func TestVeleroExecutorRunsPreSyncFinalTransferAndRestore(t *testing.T) {
 	}
 }
 
+func TestVeleroProgressHandlesVolumesWithUnknownTotals(t *testing.T) {
+	velero := &veleroExecutionStub{transfers: []veleroadapter.VolumeTransfer{
+		{Pod: "db", Volume: "data", Phase: "Completed", BytesDone: 4096, TotalBytes: 4096},
+		{Pod: "files", Volume: "data", Phase: "InProgress", BytesDone: 512, TotalBytes: 0},
+	}}
+	executor, runID := veleroExecutorFixture(t, velero)
+	resolved := executionContext{run: domainmigration.Run{ID: runID}, application: domainapplication.SourceApplication{Namespace: "business"}}
+	done, total, err := executor.recordTransfers(context.Background(), resolved, "backup")
+	if err != nil || done != 4608 || total != 4608 {
+		t.Fatalf("mixed known and unknown totals: %d/%d, %v", done, total, err)
+	}
+	progress := executor.progress.(*progressRepositoryStub)
+	if progress.transfers[1].TotalBytes != 512 || progress.transfers[1].TransferredBytes != 512 {
+		t.Fatalf("unknown total must retain observed bytes: %+v", progress.transfers[1])
+	}
+}
+
 func TestVeleroExecutorStopsOnFailedBackup(t *testing.T) {
 	executor, runID := veleroExecutorFixture(t, &veleroExecutionStub{backupCreate: veleroadapter.BackupStatus{Phase: "Failed", Errors: 1, Message: "repository unavailable"}})
 	err := executor.Handle(context.Background(), domainmigration.Lease{RunID: runID, StepType: domainmigration.StepFinalBackup})

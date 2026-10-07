@@ -1,0 +1,39 @@
+{
+  "name": "sks-migration-center-docs",
+  "version": "0.5.0",
+  "private": true,
+  "scripts": {
+    "start": "docusaurus start",
+    "build": "docusaurus build",
+    "build:offline": "DOCS_BASE_URL=/docs/ docusaurus build",
+    "serve": "docusaurus serve",
+    "typecheck": "tsc --noEmit",
+    "verify:assets": "node scripts/verify-assets.mjs"
+  },
+  "dependencies": {
+    "@docusaurus/core": "3.8.1",
+    "@docusaurus/plugin-content-docs": "3.8.1",
+    "@docusaurus/preset-classic": "3.8.1",
+    "@docusaurus/theme-classic": "3.8.1",
+    "@docusaurus/theme-common": "3.8.1",
+    "@docusaurus/utils": "3.8.1",
+    "@easyops-cn/docusaurus-search-local": "0.55.3",
+    "clsx": "2.1.1",
+    "docusaurus-plugin-image-zoom": "3.0.1",
+    "prism-react-renderer": "2.4.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@docusaurus/module-type-aliases": "3.8.1",
+    "@docusaurus/tsconfig": "3.8.1",
+    "@docusaurus/types": "3.8.1",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=22 <27"
+  },
+  "overrides": {
+    "webpack": "5.99.9"
+  }
+}

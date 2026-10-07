@@ -646,6 +646,11 @@ func (e *VeleroExecutor) recordTransfers(ctx context.Context, resolved execution
 	var transferred, total int64
 	for _, value := range values {
 		done, size := value.BytesDone, value.TotalBytes
+		// Velero may publish bytesDone before discovering totalBytes. Include
+		// those bytes in the lower-bound total so mixed-volume progress stays valid.
+		if size == 0 && done > 0 {
+			size = done
+		}
 		if size > 0 && done > size {
 			done = size
 		}
@@ -684,6 +689,9 @@ func (e *VeleroExecutor) recordDataMoverDownloads(ctx context.Context, resolved 
 	var transferred, total int64
 	for _, value := range values {
 		done, size := value.BytesDone, value.TotalBytes
+		if size == 0 && done > 0 {
+			size = done
+		}
 		if size > 0 && done > size {
 			done = size
 		}

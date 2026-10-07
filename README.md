@@ -15,29 +15,27 @@ SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用�
 - 目标集群节点能够从 Harbor 拉取镜像；
 - 目标集群中可用的 SmartX ELF CSI RWO StorageClass，或明确指定其他 RWO StorageClass。
 
-完整离线包发布在 [GitHub Release v0.3.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.3.0)：
+完整离线包发布在 [GitHub Release v0.5.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.5.0)：
 
-- `sks-migration-center-0.3.0-linux-amd64.tar.gz`
-- `sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256`
+- `sks-migration-center-0.5.0-linux-amd64.tar.gz`
+- `sks-migration-center-0.5.0-linux-amd64.tar.gz.sha256`
 
 归档包含 16 个 `linux/amd64` OCI 镜像、平台和 Add-on Helm Chart、镜像锁、静态安装器及校验清单。安装过程不访问公网，也不要求目标终端安装 Docker、Helm、Skopeo 或 Crane。
 
 ### 2. 校验并解压
 
 ```bash
-sha256sum -c sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256
+sha256sum -c sks-migration-center-0.5.0-linux-amd64.tar.gz.sha256
 
-mkdir -p sks-migration-center-0.3.0
-tar -xzf sks-migration-center-0.3.0-linux-amd64.tar.gz \
-  -C sks-migration-center-0.3.0
-cd sks-migration-center-0.3.0
+mkdir -p sks-migration-center-0.5.0
+tar -xzf sks-migration-center-0.5.0-linux-amd64.tar.gz \
+  -C sks-migration-center-0.5.0
+cd sks-migration-center-0.5.0
 ```
 
-当前发行归档 SHA-256：
+归档 SHA-256 以同一 Release 的 `.sha256` 文件为准，不复用旧版本摘要。
 
-```text
-16ee0da3c1602303397c47b8ce2ddde145a4a166a315e9548ecbd96dbd7f3e50
-```
+v0.5.0 的 Web 镜像内置简体中文离线文档站。登录后点击右上角“使用指引”，或访问同源 `/docs/`；完整操作教程见根目录 [平台使用指引](./平台使用指引.md)。文档和搜索不需要互联网。
 
 ### 3. 准备凭据文件
 
@@ -195,6 +193,9 @@ PREFLIGHT
 | [`internal/offline/`](./internal/offline) | 离线归档、OCI 镜像锁、Registry 导入、签名和完整性校验 |
 | [`internal/acceptance/`](./internal/acceptance) | 双集群、真实 SKS、MinIO、NFS、Velero 和 Compose 验收测试入口 |
 | [`web/`](./web) | React、TypeScript、Ant Design 管理界面和 Vitest 测试 |
+| [`docs-site/`](./docs-site) | 简体中文 Docusaurus 文档站、真实教程截图、本地搜索及离线资源校验 |
+| [`netlify.toml`](./netlify.toml) | 文档站可选在线构建配置；本次不发布公网站点 |
+| [`examples/`](./examples) | 不包含凭证值的 Kubernetes Nextcloud 教学部署清单 |
 | [`deploy/charts/`](./deploy/charts) | 平台、MinIO、NFS CSI 和 Velero 的离线 Helm Chart |
 | [`deploy/offline/`](./deploy/offline) | 离线组件清单、镜像锁模板、一键部署入口和详细部署文档 |
 | [`build/`](./build) | 平台/工具镜像 Dockerfile 及 MinIO、Kompose、Kopia 源镜像锁 |

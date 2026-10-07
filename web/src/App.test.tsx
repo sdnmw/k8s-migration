@@ -23,6 +23,10 @@ describe('App', () => {
     expect(screen.getByText('SmartX SKS')).toBeInTheDocument()
     expect(await screen.findByText('暂无迁移任务')).toBeInTheDocument()
     expect(screen.queryByText('迁移服务正常')).not.toBeInTheDocument()
+    const guide = screen.getByRole('link', { name: /使用指引/ })
+    expect(guide).toHaveAttribute('href', '/docs/')
+    expect(guide).toHaveAttribute('target', '_blank')
+    expect(guide).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
   it('opens the administrator password change dialog from the account menu', async () => {

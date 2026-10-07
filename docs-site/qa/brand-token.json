@@ -1,0 +1,16 @@
+{
+  "colors": [
+    {"value":"#0080ff","token":"fill-outstanding-base","role":"links, focus and numbered annotations"},
+    {"value":"#005ed1","token":"fill-outstanding-dark","role":"active links"},
+    {"value":"#009dff","token":"fill-outstanding-bright","role":"link hover"},
+    {"value":"#ffffff","token":"fill-neutral-white","role":"page and ordinary surface"},
+    {"value":"#f2f5fa","token":"fill-neutral-opaque-1","role":"sidebar background"},
+    {"value":"#e4e9f2","token":"fill-neutral-opaque-3","role":"neutral borders and separators"},
+    {"value":"#00122e","token":"text-neutral-primary","role":"primary text"},
+    {"value":"rgba(44,56,82,.75)","token":"text-neutral-secondary","role":"secondary text"},
+    {"value":"rgba(247,248,250,.97)","token":"fallback-zoom-backdrop","role":"local image zoom overlay"},
+    {"value":"rgba(20,24,31,.97)","token":"fallback-dark-zoom-backdrop","role":"inactive dark mode fallback"}
+  ],
+  "font_stack_requested":"Inter, PingFang SC, Noto Sans SC, system-ui, sans-serif",
+  "font_delivery":"system fonts only, no network font request"
+}

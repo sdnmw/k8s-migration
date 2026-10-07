@@ -7,9 +7,9 @@ set -eu
 # explicit about the intentionally relaxed signing and scan policy.
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-output_dir=${1:-"$root_dir/output/sks-migration-center-0.4.0-amd64"}
+output_dir=${1:-"$root_dir/output/sks-migration-center-0.5.0-amd64"}
 staging_dir="$output_dir/staging"
-archive="$output_dir/sks-migration-center-0.4.0-linux-amd64.tar.gz"
+archive="$output_dir/sks-migration-center-0.5.0-linux-amd64.tar.gz"
 go_bin=${GO_BIN:-"$root_dir/.cache/toolchains/go/bin/go"}
 reuse_official_layouts_dir=${REUSE_OFFICIAL_LAYOUTS_DIR:-}
 
@@ -128,6 +128,9 @@ else
       (cd "$root_dir" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 "$go_bin" build -trimpath -ldflags="-s -w" -o "$prebuilt_dir/worker/worker" ./cmd/worker)
       (cd "$root_dir/web" && npm ci && npm run build)
       cp -R "$root_dir/web/dist"/. "$prebuilt_dir/web/dist/"
+      (cd "$root_dir/docs-site" && npm ci && npm run build:offline)
+      mkdir -p "$prebuilt_dir/web/dist/docs"
+      cp -R "$root_dir/docs-site/build"/. "$prebuilt_dir/web/dist/docs/"
       build_precompiled_platform api build/package/api-prebuilt.Dockerfile "$prebuilt_dir/api"
       build_precompiled_platform worker build/package/worker-prebuilt-release.Dockerfile "$prebuilt_dir/worker"
       build_precompiled_platform web build/package/web-prebuilt.Dockerfile "$prebuilt_dir/web"
@@ -208,6 +211,9 @@ cp "$root_dir/build/kopia/source.lock.yaml" "$staging_dir/policies/kopia-source.
 cp "$root_dir/deploy/offline/README.md" "$staging_dir/README.md"
 cp "$root_dir/docs/operations/migration-failure-lessons.md" "$staging_dir/MIGRATION-TROUBLESHOOTING.md"
 cp "$root_dir/MIGRATION_USER_GUIDE.md" "$staging_dir/MIGRATION_USER_GUIDE.md"
+cp "$root_dir/平台使用指引.md" "$staging_dir/平台使用指引.md"
+mkdir -p "$staging_dir/examples"
+cp "$root_dir/examples/nextcloud-k8s-source.yaml" "$staging_dir/examples/nextcloud-k8s-source.yaml"
 mkdir -p "$staging_dir/docs/images/migration-user-guide"
 cp -R "$root_dir/docs/images/migration-user-guide"/. "$staging_dir/docs/images/migration-user-guide/"
 cp "$root_dir/NFS_MIGRATION_GUIDE.md" "$staging_dir/NFS_MIGRATION_GUIDE.md"

@@ -13,6 +13,9 @@
 /web/node_modules/
 /web/dist/
 /web/coverage/
+/docs-site/node_modules/
+/docs-site/build/
+/docs-site/.docusaurus/
 *.tsbuildinfo
 
 # Local runtime state

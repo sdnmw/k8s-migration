@@ -81,6 +81,9 @@ button, input { font: inherit; }
   line-height: normal;
 }
 
+.header-actions { display: inline-flex; align-items: center; gap: 6px; }
+.guide-button { height: 36px; color: var(--color-text-secondary); }
+.guide-button:hover { color: var(--color-primary-600) !important; background: var(--color-primary-50) !important; }
 .account-button { display: inline-flex; align-items: center; height: 40px; gap: 8px; color: var(--color-text-secondary); }
 .account-button .ant-avatar { color: #0064ad; background: var(--color-primary-50); }
 .application-content { min-height: calc(100vh - 56px); padding: 24px; background: var(--color-bg-page); }

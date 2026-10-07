@@ -1,0 +1,8 @@
+{
+  "brand_context": "product_ui",
+  "content_type": "offline_product_documentation_and_real_ui_walkthrough",
+  "industry_mode": "none",
+  "canvas": {"width": 1440, "height": 900, "responsive": true},
+  "primary_evidence": ["real migration screenshots", "Nextcloud file SHA256 parity"],
+  "human_review_required": ["lab addresses intentionally retained", "existing project avatar is not an official SmartX logo"]
+}

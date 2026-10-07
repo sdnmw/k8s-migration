@@ -1,0 +1,20 @@
+{
+  "overall_status":"pass",
+  "scope":"documentation visual brand and browser readability, not a security audit",
+  "context":"product_ui",
+  "checks":{
+    "semantic_neutral_structure":"pass",
+    "no_decorative_gradients_or_color_bars":"pass",
+    "existing_avatar_provenance_declared":"pass",
+    "real_screenshots_with_instructions":"pass",
+    "desktop_1440x900":"pass",
+    "mobile_390x844_no_horizontal_overflow":"pass",
+    "local_search":"pass",
+    "image_zoom":"pass",
+    "no_external_runtime_requests":"pass"
+  },
+  "font_stack_requested":"Inter, PingFang SC, Noto Sans SC, system-ui, sans-serif",
+  "font_resolution":"system fallback stack; no bundled or downloaded font",
+  "evidence":["scripts/check-browser.cjs","scripts/verify-assets.mjs","src/data/guide-screenshots.json"],
+  "review_notes":["Authorized lab IP addresses retained intentionally", "Existing platform avatar is not presented as an official SmartX logo", "Docusaurus build dependency audit findings tracked separately"]
+}

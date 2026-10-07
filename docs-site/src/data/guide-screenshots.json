@@ -1,0 +1,799 @@
+[
+  {
+    "id": 1,
+    "file": "01-login.png",
+    "title": "登录平台",
+    "action": "输入安装时的管理员账号和密码，点击登录。",
+    "expected": "进入概览；登录后立即修改初始密码。",
+    "failure": "认证失败先确认当前密码，升级不会重置已修改密码。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 2,
+    "file": "02-overview.png",
+    "title": "查看概览",
+    "action": "核对环境数量、任务统计和组件概况。",
+    "expected": "已导入的环境及迁移记录能显示。",
+    "failure": "统计异常先检查 API/数据库，勿反复重建环境。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 3,
+    "file": "03-migrations-list.png",
+    "title": "筛选迁移任务",
+    "action": "用状态页签和搜索框查找指定任务，点击名称。",
+    "expected": "进入对应 Run 详情，列表不混淆源应用。",
+    "failure": "找不到记录时清空筛选，再核对是否已删除。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 4,
+    "file": "04-source-environments.png",
+    "title": "源环境列表",
+    "action": "进入环境→源环境，找到主机或集群。",
+    "expected": "类型、连接状态与地址符合预期。",
+    "failure": "地址不符时不要继续迁移，先检查保存的凭证。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 5,
+    "file": "05-target-sks.png",
+    "title": "目标 SKS 列表",
+    "action": "进入 SmartX SKS，核对目标工作负载集群。",
+    "expected": "目标连接正常，能力快照可读取。",
+    "failure": "不要导入 Cluster API 管控集群；连接失败先查权限。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 6,
+    "file": "06-resource-mappings.png",
+    "title": "资源映射列表",
+    "action": "查看 SC/NS/NFS 等规则数量，打开配置。",
+    "expected": "找到本教程的 Namespace 映射配置。",
+    "failure": "没有配置时可自动迁移；需要独立 Namespace 才创建规则。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 7,
+    "file": "07-registry-mappings.png",
+    "title": "镜像仓库映射",
+    "action": "查看源 Registry 前缀及目标 Harbor 前缀。",
+    "expected": "镜像最终路径与节点可拉取路径一致。",
+    "failure": "映射只改地址；Kubernetes 镜像不存在时先准备镜像。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 8,
+    "file": "08-transform-rules.png",
+    "title": "资源转换入口",
+    "action": "查看 API 与字段转换预览及规则。",
+    "expected": "了解资源将如何规范化，不盲目加安全限制。",
+    "failure": "转换不兼容时检查匹配条件与目标 API 支持。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 9,
+    "file": "09-storage-profiles.png",
+    "title": "存储配置列表",
+    "action": "核对 StorageClass、NFS server/export 和 READY 状态。",
+    "expected": "使用的存储配置可持久化读写。",
+    "failure": "先准备存储并验证，再重新验证读写。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 10,
+    "file": "10-object-storage.png",
+    "title": "对象存储列表",
+    "action": "确认默认 MinIO 或自建 S3 已登记，测试连接。",
+    "expected": "仓库存在，源/目标可达。",
+    "failure": "检查 endpoint、bucket、prefix 及 BSL 实际配置。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 11,
+    "file": "11-credentials.png",
+    "title": "凭证列表",
+    "action": "查看名称和类型，不尝试回读凭证内容。",
+    "expected": "只显示元数据，没有敏感值。",
+    "failure": "被引用的凭证不能直接删除，先解除引用。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 12,
+    "file": "12-create-migration-source.png",
+    "title": "向导第 1 步：源环境",
+    "action": "选择 Kubernetes 或 Compose，再选择已连接环境。",
+    "expected": "下一步启用，显示与来源匹配的应用。",
+    "failure": "没有环境时返回源环境导入并测试连接。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 13,
+    "file": "13-k8s-nextcloud-source-file.png",
+    "title": "Kubernetes 数据基线",
+    "action": "在源 Nextcloud 上传独立的教程文件。",
+    "expected": "文件位于 SKS-Kubernetes-Migration-v0.5.0。",
+    "failure": "上传失败先确认源业务 Ready、容量和账号权限。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 14,
+    "file": "14-compose-nextcloud-source-file.png",
+    "title": "Compose 数据基线",
+    "action": "在源 Nextcloud 上传 Compose 教程文件。",
+    "expected": "文件位于 SKS-Compose-Migration-v0.5.0。",
+    "failure": "不要与 Kubernetes 文件混用，记录独立校验值。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 15,
+    "file": "15-k8s-discovery-result.png",
+    "title": "自动发现 Kubernetes 应用",
+    "action": "在源环境点击发现应用，扫描 Namespace。",
+    "expected": "发现 nextcloud-k8s-source 的业务清单。",
+    "failure": "检查 kubeconfig 对 Namespace 与资源的 list 权限。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 16,
+    "file": "16-k8s-nextcloud-discovered.png",
+    "title": "核对已发现应用",
+    "action": "确认应用名及 Namespace 后再继续。",
+    "expected": "Nextcloud、MariaDB、Redis 和 PVC 在清单中。",
+    "failure": "发现按钮可能默认选第一条，必须核对实际选择。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 17,
+    "file": "17-k8s-manual-resource-selection.png",
+    "title": "手选 Namespace 资源",
+    "action": "读取 nextcloud-k8s-source，勾选完整业务资源并保存。",
+    "expected": "保存为命名明确的迁移应用；依赖未遗漏。",
+    "failure": "缺少配置/Secret/PVC 时重新读取，不绕过验证。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 18,
+    "file": "18-k8s-assessment-summary.png",
+    "title": "向导第 3 步：评估",
+    "action": "选目标，点击执行评估，再点击评分卡。",
+    "expected": "BLOCKER 为 0 后可下一步。",
+    "failure": "分数不是成功率；逐项处理阻塞问题。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 19,
+    "file": "19-k8s-assessment-details.png",
+    "title": "查看评分细则",
+    "action": "展开 ALL/BLOCKER/WARNING，阅读规则和建议。",
+    "expected": "可看到受影响资源与具体判定。",
+    "failure": "告警不能一概忽略，尤其镜像和存储规则。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 20,
+    "file": "20-k8s-running-timeline.png",
+    "title": "观察执行时序",
+    "action": "展开当前 Step 的尝试与关键事件。",
+    "expected": "有心跳、阶段结果及等待原因。",
+    "failure": "心跳停止时查 Worker；有心跳但等待时查 Velero。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 21,
+    "file": "21-k8s-volume-transfer.png",
+    "title": "Kubernetes 卷传输",
+    "action": "核对两个 PVC 的 FSB 备份/恢复记录。",
+    "expected": "最终传输完成且有实际字节数。",
+    "failure": "预同步和最终备份可能分别列行，不代表多出业务 PVC。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 22,
+    "file": "22-k8s-task-information.png",
+    "title": "核对任务信息",
+    "action": "查看计划、环境、策略及 Namespace 映射。",
+    "expected": "目标是 nextcloud-k8s-demo，策略为 FS_BACKUP。",
+    "failure": "发现填错时终止割接并恢复源端，再编辑新任务。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 23,
+    "file": "23-add-source-kubernetes.png",
+    "title": "添加 Kubernetes 源环境",
+    "action": "填写环境名并上传完整 kubeconfig。",
+    "expected": "保存后测试连接通过。",
+    "failure": "不能把文件路径文字当作 kubeconfig 内容。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 24,
+    "file": "24-add-source-compose.png",
+    "title": "添加 Compose 主机",
+    "action": "填写 SSH 地址、用户和认证；指纹可选。",
+    "expected": "连接和 Docker/Compose 检查通过。",
+    "failure": "自动获取指纹仍需可信核验；权限不足按路径授权。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 25,
+    "file": "25-k8s-cutover-confirmation.png",
+    "title": "确认 Kubernetes 人工切流",
+    "action": "验证目标业务后确认测试访问已转到目标入口。",
+    "expected": "Run 完成，源端不会自动恢复。",
+    "failure": "没有完成外部入口切换不要确认；平台不会改 DNS。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 26,
+    "file": "26-k8s-source-restore-confirmation.png",
+    "title": "恢复 Kubernetes 源端",
+    "action": "演示完成后点击恢复源端并确认。",
+    "expected": "原三个 Deployment 副本数恢复。",
+    "failure": "恢复不自动切回 DNS，也不删除目标资源。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 27,
+    "file": "27-k8s-target-file-verified.png",
+    "title": "目标 Kubernetes 文件验证",
+    "action": "登录目标并打开教程目录，下载文件计算 SHA-256。",
+    "expected": "79 字节，校验值与源端一致。",
+    "failure": "若提示不可信域名，在目标 Nextcloud 添加新入口。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 28,
+    "file": "28-k8s-completed-topology.png",
+    "title": "Kubernetes 完成拓扑",
+    "action": "切到资源拓扑，刷新当前状态。",
+    "expected": "源/映射/目标关系与验证结论可见。",
+    "failure": "映射漂移要对照执行时快照和当前实际镜像。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 29,
+    "file": "29-compose-await-cutover.png",
+    "title": "Compose 等待人工切流",
+    "action": "阅读目标验证结果，再进行业务测试。",
+    "expected": "三个工作负载及两个卷恢复完成。",
+    "failure": "等待切流不是卡住，无须重复启动任务。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 30,
+    "file": "30-compose-volume-transfers.png",
+    "title": "Compose 卷传输",
+    "action": "核对 db-data 与 nc-data 的 Kopia 记录。",
+    "expected": "两个卷 COMPLETED，传输不是 0。",
+    "failure": "看到数据目录仍需下载文件验证内容。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 31,
+    "file": "31-compose-cutover-confirmation.png",
+    "title": "确认 Compose 人工切流",
+    "action": "目标文件验证通过后确认割接。",
+    "expected": "任务完成，保留目标和备份证据。",
+    "failure": "不能将该确认当作自动 DNS 操作。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 32,
+    "file": "32-compose-target-file-verified.png",
+    "title": "目标 Compose 文件验证",
+    "action": "登录目标并下载 Compose 教程文件。",
+    "expected": "76 字节，与源端 SHA-256 一致。",
+    "failure": "Nextcloud trusted_domains 属于应用配置，须添加目标入口。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 33,
+    "file": "33-compose-source-restore-confirmation.png",
+    "title": "恢复 Compose 源端",
+    "action": "点击恢复源端，确认重新启动原服务。",
+    "expected": "源地址可以再次登录，原文件保持一致。",
+    "failure": "数据库与文件卷均需保留；不要 docker compose down -v。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 34,
+    "file": "34-task-actions-menu.png",
+    "title": "更多任务操作",
+    "action": "点击右上 …，选择编辑、重执行或清理。",
+    "expected": "每项操作有独立确认和边界。",
+    "failure": "删除任务不删除业务；清理备份前确认回滚窗口。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 35,
+    "file": "35-compose-capabilities.png",
+    "title": "Compose 能力发现",
+    "action": "在对应主机点击能力发现。",
+    "expected": "Docker/Compose 版本及项目能力可见。",
+    "failure": "发现项目路径来自源主机，不能用本地路径替代。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 36,
+    "file": "36-kubernetes-capabilities.png",
+    "title": "Kubernetes 能力发现",
+    "action": "在集群点击能力发现，核对 CSI/StorageClass。",
+    "expected": "目标支持所选迁移策略。",
+    "failure": "快照能力不足时使用 FSB，不盲选 CSI Data Mover。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 37,
+    "file": "37-register-compose-form.png",
+    "title": "手动注册 Compose",
+    "action": "选择主机及本地 compose/.env 文件。",
+    "expected": "解析 Inventory 后登记应用。",
+    "failure": "引用外部文件时优先从主机发现完整项目。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 38,
+    "file": "38-compose-application-topology.png",
+    "title": "应用视图",
+    "action": "按业务链路查看 Compose 到 Kubernetes 的转换。",
+    "expected": "Service/Deployment/PVC 对应关系清楚。",
+    "failure": "无独立目标的 Compose 网络应说明转换语义而非失败。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 39,
+    "file": "39-compose-resource-topology.png",
+    "title": "资源视图",
+    "action": "切换资源视图查看真实依赖。",
+    "expected": "挂载、选择器和映射连线可追踪。",
+    "failure": "资源被过滤时清空搜索及类型条件。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 40,
+    "file": "40-resource-focus.png",
+    "title": "节点聚焦",
+    "action": "点击源 nc 服务，查看相关目标和连线。",
+    "expected": "相关单元高亮，其余置灰。",
+    "failure": "点击画布空白取消聚焦，不需要关闭任务。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 41,
+    "file": "41-resource-properties.png",
+    "title": "资源属性详情",
+    "action": "向下滚动到详情，核对镜像、端口、网络、挂载。",
+    "expected": "只显示环境键名，不显示凭证值。",
+    "failure": "属性与当前状态不一致时刷新观察并检查映射差异。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 42,
+    "file": "42-resource-differences.png",
+    "title": "转换差异",
+    "action": "切换转换差异页签，逐项看源值和目标值。",
+    "expected": "Namespace 与资源生成规则有来源说明。",
+    "failure": "未生效规则要核对是否匹配到该资源。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+  {
+    "id": 43,
+    "file": "43-related-resources.png",
+    "title": "关联资源",
+    "action": "切到关联资源，沿关系查看上游和下游。",
+    "expected": "关系类型横排显示，资源名可选择。",
+    "failure": "没有关系时检查 Inventory 是否完整或辅助资源被隐藏。",
+    "capturedAt": "2026-10-08",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "source": "real_platform_playwright",
+    "environment": "authorized_lab",
+    "sensitiveData": "credentials excluded; authorized lab labels retained"
+  },
+{
+  "id": 44,
+  "file": "44-add-credential.png",
+  "title": "添加凭证",
+  "action": "点击添加凭证，选择类型并输入名称及私密材料；截图只演示空白表单。",
+  "expected": "保存后仅显示元数据，不能回读密码或密钥。",
+  "failure": "类型或格式错误时根据字段校验修改，勿反复上传明文到日志。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+  "id": 45,
+  "file": "45-change-admin-password.png",
+  "title": "修改管理员密码",
+  "action": "打开右上角管理员菜单并选择修改密码，填写当前、新密码及确认值。",
+  "expected": "新密码至少 12 字符；成功后重新登录。",
+  "failure": "确认当前密码和新密码校验要求，不使用初始化 Secret 推断当前密码。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+  "id": 46,
+  "file": "46-compose-select-application.png",
+  "title": "向导第 2 步：Compose 应用",
+  "action": "选择主机发现的 nextcloud-redis-mariadb，核对三个服务和两个卷后点下一步。",
+  "expected": "选择实际运行项目，Inventory 不混入旧注册应用。",
+  "failure": "找不到项目时回源环境发现应用，检查文件读取权限。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+  "id": 47,
+  "file": "47-compose-target-mapping.png",
+  "title": "向导第 4 步：映射与策略",
+  "action": "输入计划名称，选择教程 Namespace 映射，保留 Kopia 和在线预同步。",
+  "expected": "目标为 nextcloud-compose-demo；保存并执行检查进入下一步。",
+  "failure": "映射可不选，但教程独立命名空间需要选正确规则。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+  "id": 48,
+  "file": "48-compose-preflight.png",
+  "title": "向导第 5 步：前置检查",
+  "action": "逐条展开前置检查，确认 BLOCKER 为 0。",
+  "expected": "镜像、连接、对象存储及数据迁移组件检查可通过。",
+  "failure": "按失败检查的修复建议处理后重新检查，不绕过 BLOCKER。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+    "id": 49,
+  "file": "49-compose-confirm-plan.png",
+  "title": "向导第 6 步：确认启动",
+  "action": "核对源、目标、应用和策略，勾选人工切流声明后确认并启动。",
+  "expected": "创建新的 Run，最终同步会短暂停止源业务。",
+  "failure": "若摘要不符回上一步；截图演示确认页，不自动重复启动。",
+  "capturedAt": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+},
+{
+  "id": 50,
+  "file": "50-offline-guide-entry.png",
+  "title": "打开平台内离线使用指引",
+  "action": "点击右上角管理员菜单前的使用指引按钮。",
+  "expected": "新标签页打开同源 /docs/，不需要再次登录或连接互联网。",
+  "failure": "打不开时确认 Web 镜像为 v0.5.0，检查 /docs/ 静态路由，勿将其交给平台 SPA。",
+  "capturedAt": "2026-10-08",
+  "viewport": {"width": 1440, "height": 900},
+  "source": "real_platform_playwright",
+  "environment": "authorized_lab",
+  "sensitiveData": "credentials excluded; authorized lab labels retained"
+}
+]

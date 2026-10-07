@@ -1,0 +1,38 @@
+:root {
+  --ifm-color-primary: #0080ff;
+  --ifm-color-primary-dark: #005ed1;
+  --ifm-color-primary-darker: #005ed1;
+  --ifm-color-primary-darkest: #005ed1;
+  --ifm-color-primary-light: #009dff;
+  --ifm-color-primary-lighter: #009dff;
+  --ifm-color-primary-lightest: #009dff;
+  --ifm-font-family-base: Inter, "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  --ifm-heading-font-weight: 600;
+  --ifm-code-font-size: 92%;
+  --ifm-navbar-shadow: 0 1px 0 #e4e9f2;
+}
+body { background: #ffffff; color: #00122e; }
+.navbar { background: #ffffff; }
+.navbar__logo img { width: 30px; height: 30px; border-radius: 50%; }
+.theme-doc-sidebar-container { background: #f2f5fa; }
+.markdown img { border: 1px solid #e4e9f2; border-radius: 6px; cursor: zoom-in; }
+.markdown table { display: block; width: 100%; overflow: auto; }
+.alert { border-radius: 6px; }
+.hero-banner { padding: 3rem 0; background: #f2f5fa; border-bottom: 1px solid #e4e9f2; }
+.hero-banner h1 { font-size: clamp(2rem, 4vw, 3rem); }
+.hero-banner p { max-width: 760px; font-size: 1rem; color: rgba(44,56,82,.75); }
+.feature-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin: 2rem 0; }
+.feature-card { display:block; padding: 22px; color: inherit; border: 1px solid #e4e9f2; border-radius: 6px; background: #ffffff; }
+.feature-card:hover { color: #005ed1; text-decoration:none; border-color:#0080ff; }
+.feature-card h3 { margin:0 0 8px; }
+.feature-card p { margin:0; color:rgba(44,56,82,.75); }
+.step-badge { display:inline-flex; align-items:center; justify-content:center; min-width:28px; height:28px; margin-right:8px; padding:0 8px; color:#0080ff; background:#f2f5fa; border-radius:6px; font-weight:600; }
+.figure-caption { margin-top:-.25rem; color:rgba(44,56,82,.75); font-size:14px; }
+@media (max-width: 996px) { .feature-grid { grid-template-columns:1fr; } .hero-banner { padding:3rem 1.25rem; } }
+.guide-figure { margin: 1.5rem 0 2rem; }
+.guide-figure figcaption { font-weight: 600; margin: .6rem 0; }
+.guide-image { position: relative; }
+.guide-focus { margin: .75rem 0; }
+.guide-focus summary { cursor: pointer; color: var(--ifm-color-primary); }
+.guide-focus > div { width: 100%; aspect-ratio: 2.4; background-size: 200% auto; background-repeat: no-repeat; border: 1px solid #e4e9f2; border-radius: 6px; margin-top: .5rem; }
+.guide-callout { position: absolute; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; background: #0080ff; color: #ffffff; border: 2px solid #ffffff; border-radius: 50%; pointer-events: none; }

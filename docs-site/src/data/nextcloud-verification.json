@@ -1,0 +1,25 @@
+{
+  "verifiedAt":"2026-10-08",
+  "platformVersion":"0.5.0",
+  "compose":{
+    "runId":"2a972bfc-559e-4837-bbda-38e9944b00fd",
+    "targetNamespace":"nextcloud-compose-demo",
+    "status":"COMPLETED",
+    "sourceRestored":true,
+    "file":"SKS-Compose-Migration-v0.5.0/compose-nextcloud-migration.txt",
+    "size":76,
+    "sourceAndTargetSha256":"a6886a06a915f73e5f91542539812f15d12cbc5bb3d068423942990618e2b4a9",
+    "bytesTransferred":1127906204
+  },
+  "kubernetes":{
+    "runId":"60c222e4-a43e-4cbd-b763-d9efaddbabd4",
+    "sourceNamespace":"nextcloud-k8s-source",
+    "targetNamespace":"nextcloud-k8s-demo",
+    "status":"COMPLETED",
+    "sourceRestored":true,
+    "file":"SKS-Kubernetes-Migration-v0.5.0/k8s-nextcloud-migration.txt",
+    "size":79,
+    "sourceAndTargetSha256":"99fcb9758506e2b9500abf47b0096230e81f527f176e017f3122b50225ce527d",
+    "bytesTransferred":1083926041
+  }
+}

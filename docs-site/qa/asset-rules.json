@@ -1,0 +1,5 @@
+{
+  "logo": {"source_type":"existing_repository_asset","path":"web/public/brand-logo.png","copied_to":"docs-site/static/img/brand-logo.png","provenance_status":"user_approved_existing_project_avatar_not_official_smartx_artwork","rendered_size":"30x30","modifications":"none"},
+  "screenshots": {"source":"real authorized lab via Playwright","viewport":"1440x900","credentials":"excluded","lab_addresses":"retained for reproducible tutorial"},
+  "external_assets":"none"
+}

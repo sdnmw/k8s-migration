@@ -1,0 +1,14 @@
+{
+  "source":"v0.5.0 user implementation plan",
+  "items":[
+    {"source_item":"快速开始","output_section":"docs/quick-start","status":"covered"},
+    {"source_item":"核心概念","output_section":"docs/concepts","status":"covered"},
+    {"source_item":"关键特性","output_section":"docs/features","status":"covered"},
+    {"source_item":"Compose 与 Kubernetes Nextcloud 实迁","output_section":"docs/tutorials","status":"covered"},
+    {"source_item":"所有可见功能和按钮","output_section":"docs/manual","status":"covered"},
+    {"source_item":"离线安装与升级","output_section":"docs/installation","status":"covered"},
+    {"source_item":"运维指南","output_section":"docs/operations","status":"covered"},
+    {"source_item":"故障排查与参考","output_section":"docs/troubleshooting","status":"covered"},
+    {"source_item":"截图操作与失败处理","output_section":"src/data/guide-screenshots.json and GuideShot component","status":"covered"}
+  ]
+}

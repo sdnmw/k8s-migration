@@ -2,7 +2,7 @@ import { useState, type PropsWithChildren } from 'react'
 import {
   ApartmentOutlined, AppstoreOutlined, CloudServerOutlined, DatabaseOutlined, DeploymentUnitOutlined,
   ExportOutlined, HddOutlined, KeyOutlined, LockOutlined, LogoutOutlined,
-  SafetyCertificateOutlined, SettingOutlined, SwapOutlined, DownOutlined,
+  QuestionCircleOutlined, SafetyCertificateOutlined, SettingOutlined, SwapOutlined, DownOutlined,
 } from '@ant-design/icons'
 import { App as AntApplication, Avatar, Button, Dropdown, Form, Input, Layout, Menu, Modal, Typography, type MenuProps } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
@@ -115,12 +115,17 @@ export default function AppShell({ administrator, children }: AppShellProps) {
       </Sider>
       <Layout>
         <Header className="application-header">
-          <Dropdown menu={{ items: accountItems, onClick: handleAccountAction }} placement="bottomRight" trigger={['click']}>
-            <Button type="text" className="account-button">
-              <Avatar size={28}>{administrator.username.slice(0, 1).toUpperCase()}</Avatar>
-              <span>{administrator.username}</span><DownOutlined style={{ fontSize: 10 }} />
+          <div className="header-actions">
+            <Button type="text" className="guide-button" icon={<QuestionCircleOutlined />} href="/docs/" target="_blank" rel="noopener noreferrer">
+              使用指引
             </Button>
-          </Dropdown>
+            <Dropdown menu={{ items: accountItems, onClick: handleAccountAction }} placement="bottomRight" trigger={['click']}>
+              <Button type="text" className="account-button">
+                <Avatar size={28}>{administrator.username.slice(0, 1).toUpperCase()}</Avatar>
+                <span>{administrator.username}</span><DownOutlined style={{ fontSize: 10 }} />
+              </Button>
+            </Dropdown>
+          </div>
         </Header>
         <Content className="application-content"><main key={location.pathname} className="page-surface">{children}</main></Content>
       </Layout>
