@@ -2,6 +2,8 @@
 
 SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用迁移平台，支持 Kubernetes Namespace/资源组合和 Docker Compose 应用迁移。平台只连接用户导入的源、目标环境，不操作 CAPI 管控集群，也不自动修改 DNS、负载均衡或外部防火墙。
 
+入门文档：[平台使用指引](./平台使用指引.md) · [Compose Nextcloud 迁移教程（含截图）](./Compose-Nextcloud-迁移教程.md) · [Kubernetes Nextcloud 迁移教程（含截图）](./Kubernetes-Nextcloud-迁移教程.md) · [v0.5.0 更新日志](./docs/releases/v0.5.0.md)。两份教程可直接在 GitHub 阅读，不需要启动文档站。
+
 ## 第一部分：离线部署指南
 
 ### 1. 准备条件
@@ -15,29 +17,25 @@ SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用�
 - 目标集群节点能够从 Harbor 拉取镜像；
 - 目标集群中可用的 SmartX ELF CSI RWO StorageClass，或明确指定其他 RWO StorageClass。
 
-完整离线包发布在 [GitHub Release v0.3.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.3.0)：
+完整离线包发布在 [GitHub Release v0.5.0](https://github.com/sdnmw/k8s-migration/releases/tag/v0.5.0)：
 
-- `sks-migration-center-0.3.0-linux-amd64.tar.gz`
-- `sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256`
+- `sks-migration-center-0.5.0-linux-amd64.tar.gz`
+- `sks-migration-center-0.5.0-linux-amd64.tar.gz.sha256`
 
 归档包含 16 个 `linux/amd64` OCI 镜像、平台和 Add-on Helm Chart、镜像锁、静态安装器及校验清单。安装过程不访问公网，也不要求目标终端安装 Docker、Helm、Skopeo 或 Crane。
 
 ### 2. 校验并解压
 
 ```bash
-sha256sum -c sks-migration-center-0.3.0-linux-amd64.tar.gz.sha256
+sha256sum -c sks-migration-center-0.5.0-linux-amd64.tar.gz.sha256
 
-mkdir -p sks-migration-center-0.3.0
-tar -xzf sks-migration-center-0.3.0-linux-amd64.tar.gz \
-  -C sks-migration-center-0.3.0
-cd sks-migration-center-0.3.0
+mkdir -p sks-migration-center-0.5.0
+tar -xzf sks-migration-center-0.5.0-linux-amd64.tar.gz \
+  -C sks-migration-center-0.5.0
+cd sks-migration-center-0.5.0
 ```
 
-当前发行归档 SHA-256：
-
-```text
-16ee0da3c1602303397c47b8ce2ddde145a4a166a315e9548ecbd96dbd7f3e50
-```
+归档 SHA-256 以同一 Release 的 `.sha256` 文件为准，不复用旧版本摘要。
 
 ### 3. 准备凭据文件
 
