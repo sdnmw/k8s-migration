@@ -2,6 +2,8 @@
 
 SKS Migration Center 是面向 SmartX SKS 工作负载集群的一次性应用迁移平台，支持 Kubernetes Namespace/资源组合和 Docker Compose 应用迁移。平台只连接用户导入的源、目标环境，不操作 CAPI 管控集群，也不自动修改 DNS、负载均衡或外部防火墙。
 
+入门文档：[平台使用指引](./平台使用指引.md) · [Compose Nextcloud 迁移教程（含截图）](./Compose-Nextcloud-迁移教程.md) · [Kubernetes Nextcloud 迁移教程（含截图）](./Kubernetes-Nextcloud-迁移教程.md) · [v0.5.0 更新日志](./docs/releases/v0.5.0.md)。两份教程可直接在 GitHub 阅读，不需要启动文档站。
+
 ## 第一部分：离线部署指南
 
 ### 1. 准备条件
