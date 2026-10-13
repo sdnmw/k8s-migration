@@ -257,6 +257,26 @@ func (e *ComposeExecutor) preflight(ctx context.Context, runID uuid.UUID) error 
 		return err
 	}
 	defer resolved.clear()
+	runtime, runtimeErr := composeanalyzer.PrepareTargetRuntime(ctx, resolved.application.Inventory.Compose.ProjectName, resolved.definition.ComposeYAML, resolved.definition.EnvironmentFile)
+	if runtimeErr != nil {
+		return runtimeErr
+	}
+	if len(runtime.Proxies) > 0 {
+		wipeBytes(runtime.ComposeYAML)
+		events, err := e.runs.ListEvents(ctx, runID, 0, 10000)
+		if err != nil {
+			return err
+		}
+		if !eventExists(events, "COMPOSE_RUNTIME_ADAPTED") {
+			names := []string{}
+			for _, proxy := range runtime.Proxies {
+				names = append(names, proxy.Service)
+			}
+			if err := e.progress.AppendEvent(ctx, domainmigration.Event{RunID: runID, Type: "COMPOSE_RUNTIME_ADAPTED", Severity: domainmigration.EventInfo, Message: "Traefik Docker socket 将替换为目标端文件路由；业务数据卷正常迁移，源配置保持不变", Detail: map[string]any{"services": names, "adapter": "traefik-file-provider", "preserveHost": true}}); err != nil {
+				return err
+			}
+		}
+	}
 	servicesToPublish := make([]string, 0)
 	sourceImages := make(map[string]string)
 	for _, service := range resolved.application.Inventory.Compose.Services {
@@ -616,7 +636,14 @@ func (e *ComposeExecutor) rollback(ctx context.Context, runID uuid.UUID) error {
 }
 
 func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecutionContext) (transform.Result, error) {
-	composeYAML := resolved.definition.ComposeYAML
+	runtime, err := composeanalyzer.PrepareTargetRuntime(ctx, resolved.application.Inventory.Compose.ProjectName, resolved.definition.ComposeYAML, resolved.definition.EnvironmentFile)
+	if err != nil {
+		return transform.Result{}, err
+	}
+	composeYAML := runtime.ComposeYAML
+	if len(runtime.Proxies) > 0 {
+		defer wipeBytes(composeYAML)
+	}
 	if len(resolved.publishedImages) > 0 {
 		var err error
 		composeYAML, err = composeYAMLWithPublishedImages(composeYAML, resolved.publishedImages)
@@ -648,6 +675,9 @@ func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecution
 	inventory = composeInventoryWithRawExpose(inventory, resolved.definition.ComposeYAML)
 	inventory = composeInventoryForPublishedImages(inventory, resolved.definition.ComposeYAML, resolved.publishedImages)
 	ensureComposeInternalServices(&result, inventory, resolved.namespace)
+	if err := applyComposeRuntime(&result, runtime, resolved.namespace); err != nil {
+		return result, err
+	}
 	if err := normalizeSharedComposeClaims(&result, inventory); err != nil {
 		return result, err
 	}
@@ -660,7 +690,7 @@ func (e *ComposeExecutor) convert(ctx context.Context, resolved composeExecution
 	paths := []string{}
 	for _, svc := range inventory.Services {
 		for _, mount := range svc.Mounts {
-			if mount.Type == "bind" {
+			if mount.Type == "bind" && !composeanalyzer.IsRuntimeSocket(mount.Source, mount.Target) {
 				paths = append(paths, mount.Source)
 			}
 		}
@@ -1049,6 +1079,9 @@ func normalizeSharedComposeClaims(result *transform.Result, inventory *domainapp
 			if mount.Type != "bind" && mount.Type != "volume" {
 				continue
 			}
+			if mount.Type == "bind" && composeanalyzer.IsRuntimeSocket(mount.Source, mount.Target) {
+				continue
+			}
 			claim, err := targetClaimForMount(*result, service.Name, mount.Target)
 			if err != nil {
 				return err
@@ -1106,7 +1139,7 @@ func hasComposeData(value domainapplication.SourceApplication) bool {
 	}
 	for _, service := range value.Inventory.Compose.Services {
 		for _, mount := range service.Mounts {
-			if mount.Type == "volume" || mount.Type == "bind" {
+			if mount.Type == "volume" || (mount.Type == "bind" && !composeanalyzer.IsRuntimeSocket(mount.Source, mount.Target)) {
 				return true
 			}
 		}
@@ -1148,6 +1181,9 @@ func composeTransfers(inventory *domainapplication.ComposeInventory, result tran
 	for _, service := range inventory.Services {
 		for _, mount := range service.Mounts {
 			if mount.Type != "volume" && mount.Type != "bind" {
+				continue
+			}
+			if mount.Type == "bind" && composeanalyzer.IsRuntimeSocket(mount.Source, mount.Target) {
 				continue
 			}
 			claim, err := targetClaimForMount(result, service.Name, mount.Target)

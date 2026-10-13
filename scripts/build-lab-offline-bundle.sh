@@ -7,9 +7,9 @@ set -eu
 # explicit about the intentionally relaxed signing and scan policy.
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-output_dir=${1:-"$root_dir/output/sks-migration-center-0.5.0-amd64"}
+output_dir=${1:-"$root_dir/output/sks-migration-center-0.5.1-amd64"}
 staging_dir="$output_dir/staging"
-archive="$output_dir/sks-migration-center-0.5.0-linux-amd64.tar.gz"
+archive="$output_dir/sks-migration-center-0.5.1-linux-amd64.tar.gz"
 go_bin=${GO_BIN:-"$root_dir/.cache/toolchains/go/bin/go"}
 reuse_official_layouts_dir=${REUSE_OFFICIAL_LAYOUTS_DIR:-}
 
@@ -212,6 +212,12 @@ cp "$root_dir/deploy/offline/README.md" "$staging_dir/README.md"
 cp "$root_dir/docs/operations/migration-failure-lessons.md" "$staging_dir/MIGRATION-TROUBLESHOOTING.md"
 cp "$root_dir/MIGRATION_USER_GUIDE.md" "$staging_dir/MIGRATION_USER_GUIDE.md"
 cp "$root_dir/平台使用指引.md" "$staging_dir/平台使用指引.md"
+cp "$root_dir/Compose-Nextcloud-迁移教程.md" "$staging_dir/Compose-Nextcloud-迁移教程.md"
+cp "$root_dir/Kubernetes-Nextcloud-迁移教程.md" "$staging_dir/Kubernetes-Nextcloud-迁移教程.md"
+mkdir -p "$staging_dir/docs/images/nextcloud-tutorial" "$staging_dir/docs/releases"
+cp -R "$root_dir/docs/images/nextcloud-tutorial"/. "$staging_dir/docs/images/nextcloud-tutorial/"
+cp "$root_dir/docs/releases/v0.5.1.md" "$staging_dir/docs/releases/v0.5.1.md"
+cp "$root_dir/docs/releases/v0.5.1-validation.md" "$staging_dir/docs/releases/v0.5.1-validation.md"
 mkdir -p "$staging_dir/examples"
 cp "$root_dir/examples/nextcloud-k8s-source.yaml" "$staging_dir/examples/nextcloud-k8s-source.yaml"
 mkdir -p "$staging_dir/docs/images/migration-user-guide"

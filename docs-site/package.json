@@ -1,6 +1,6 @@
 {
   "name": "sks-migration-center-docs",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "scripts": {
     "start": "docusaurus start",

@@ -31,6 +31,14 @@ Compose 本地镜像和公有镜像都会同步到联动 Harbor。创建应用�
 
 ## 数据与验证
 
+### Traefik docker.sock 找不到 PVC
+
+`docker.sock` 是 Docker 控制接口，不是可复制的数据。自 v0.5.1 起，支持的 Traefik Docker HTTP 标签路由会在目标端转为离线 File provider，并通过 Kubernetes Service 访问后端；socket 不会创建 PVC 或进入 Kopia。业务卷和证书卷仍正常迁移，源 Compose/环境配置保持不变。
+
+要求显式开启 Docker provider、`exposedByDefault=false`，并明确配置 HTTP router。当前支持 HTTP router、TLS certResolver、后端协议/端口和常用 Headers 中间件。不支持的 socket 消费者、TCP/UDP、其他中间件、静态配置冲突或不明确的后端端口会给出具体阻断原因；不要补空 PVC 或挂载目标节点的 Docker socket。
+
+原 Host/域名匹配规则保留。验证目标入口时使用相应 Host/域名，实际 DNS/VIP 切流由管理员执行；只换目标 IP 不代表域名规则会自动改写。
+
 ### Pod 正常但任务仍失败
 
 打开红色资源的下方详情，比较“执行时结论”和“当前观察”。如果执行时因镜像或探针失败，但当前已经恢复，重新验证会刷新当前观察；新 Run 应依据最新验证得到正确结论，历史失败 Run 保持不变。

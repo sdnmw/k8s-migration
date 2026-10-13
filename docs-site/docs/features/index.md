@@ -17,6 +17,8 @@ Compose 的本地构建镜像和公有镜像都会先同步到环境联动 Harbo
 
 ## 数据与存储
 
+自 v0.5.1 起，受支持的 Traefik Docker HTTP 标签路由会转为目标端离线文件路由配置；Docker socket 不作为业务卷迁移。源配置保持不变，证书卷和普通数据挂载仍保留。不支持的运行时依赖会提前给出明确原因，参见 [故障排查](../troubleshooting/index.md#traefik-dockersock-找不到-pvc)。
+
 - Compose Kopia：named volume、bind mount 的在线预同步与最终增量。
 - Velero FSB：跨 StorageClass、NFS 或普通文件系统 PVC 的备份恢复。
 - CSI Data Mover：适用于支持 CSI 快照能力的环境。

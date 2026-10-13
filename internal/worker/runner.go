@@ -126,8 +126,9 @@ func (r *Runner) processOne(ctx context.Context) (bool, error) {
 		return true, fmt.Errorf("migration job lease lost: %w", heartbeatErr)
 	}
 	if handleErr != nil {
-		if lease.Attempt >= r.config.MaxAttempts {
-			r.logger.Error("migration step exhausted retries", "stepType", lease.StepType, "attempt", lease.Attempt, "error", handleErr)
+		var permanent interface{ Permanent() bool }
+		if lease.Attempt >= r.config.MaxAttempts || (errors.As(handleErr, &permanent) && permanent.Permanent()) {
+			r.logger.Error("migration step failed", "stepType", lease.StepType, "attempt", lease.Attempt, "error", handleErr)
 			if err := r.jobs.Fail(context.WithoutCancel(ctx), lease.ID, r.config.OwnerID, handleErr.Error()); err != nil {
 				observe("store_error")
 				return true, fmt.Errorf("fail migration job: %w", err)

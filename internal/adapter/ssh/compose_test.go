@@ -75,6 +75,11 @@ func TestKopiaSnapshotCommandRestrictsMountsAndPinsImage(t *testing.T) {
 	if !strings.Contains(command, "shop_data:/data:ro") || !strings.Contains(command, "snapshot create /data --json") {
 		t.Fatalf("unexpected command: %s", command)
 	}
+	for _, want := range []string{"network=bridge", "network=host", "/sys/class/net/$bridge", "--network \"$network\"", "'{{.State.Status}}'", "= created; then docker rm"} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("network/created-container recovery missing %s", want)
+		}
+	}
 	if !strings.Contains(command, "SSL_CERT_FILE=/tmp/sks-migration-root-ca.pem") || !strings.Contains(command, "ROOT_CA_PEM_BASE64=") {
 		t.Fatalf("custom CA is not installed for the Kopia process: %s", command)
 	}

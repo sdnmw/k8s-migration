@@ -59,7 +59,7 @@ func DefaultEngine() *Engine {
 	engine, _ := NewEngine(
 		ComputeRequestsRule{}, ReplicaAvailabilityRule{}, DeprecatedAPIRule{}, TargetAPIAvailabilityRule{}, RequiredDependencyRule{},
 		RawBlockVolumeRule{}, RWXStorageRule{}, IngressClassRule{}, ExposedServiceRule{}, PodSecurityRule{}, ImageReferenceRule{}, ImageArchitectureRule{},
-		ComposeUnresolvedVariablesRule{},
+		ComposeUnresolvedVariablesRule{}, ComposeRuntimeDependencyRule{},
 	)
 	return engine
 }

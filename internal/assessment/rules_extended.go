@@ -41,6 +41,34 @@ func (rule ComposeUnresolvedVariablesRule) Evaluate(ctx Context) []Finding {
 
 type RawBlockVolumeRule struct{}
 
+type ComposeRuntimeDependencyRule struct{}
+
+func (ComposeRuntimeDependencyRule) ID() string { return "COMPOSE_RUNTIME_DEPENDENCY" }
+func (ComposeRuntimeDependencyRule) Category() domainassessment.Category {
+	return domainassessment.CategoryNetwork
+}
+func (rule ComposeRuntimeDependencyRule) Evaluate(ctx Context) []Finding {
+	if ctx.Application.Inventory.Compose == nil {
+		return nil
+	}
+	findings := []Finding{}
+	for _, warning := range ctx.Application.Inventory.Compose.Warnings {
+		if warning.Code != "COMPOSE_RUNTIME_UNSUPPORTED" && warning.Code != "COMPOSE_RUNTIME_ADAPTED" {
+			continue
+		}
+		severity, title, fix := domainassessment.SeverityWarning, "Traefik 路由将在目标端适配", true
+		if warning.Code == "COMPOSE_RUNTIME_UNSUPPORTED" {
+			severity, title, fix = domainassessment.SeverityBlocker, "Docker 运行时依赖无法直接迁移", false
+		}
+		name := warning.Service
+		if name == "" {
+			name = ctx.Application.Inventory.Compose.ProjectName
+		}
+		findings = append(findings, Finding{RuleID: rule.ID(), Category: rule.Category(), Severity: severity, Resource: application.ResourceReference{Kind: "ComposeService", Name: name}, Title: title, Description: warning.Message, Remediation: "源项目不变。目标端使用已支持的文件路由适配；不支持的 socket、路由或端口必须先配置目标适配，不能创建空 PVC 或挂载目标 Docker socket。", AutoFixable: fix})
+	}
+	return findings
+}
+
 func (RawBlockVolumeRule) ID() string { return "STORAGE_RAW_BLOCK" }
 func (RawBlockVolumeRule) Category() domainassessment.Category {
 	return domainassessment.CategoryStorage

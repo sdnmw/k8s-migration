@@ -1,14 +1,36 @@
 package assessment
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
+	composeanalyzer "github.com/smartx/sks-migration-center/internal/compose"
 	"github.com/smartx/sks-migration-center/internal/domain/application"
 	domainassessment "github.com/smartx/sks-migration-center/internal/domain/assessment"
 	"github.com/smartx/sks-migration-center/internal/domain/environment"
 )
+
+func TestAssessmentBlocksDockerSocketConsumerBeforeExecution(t *testing.T) {
+	inv, err := composeanalyzer.NewAnalyzer().Analyze(context.Background(), "demo", []byte(`services: {agent: {image: agent:v1, volumes: ["/var/run/docker.sock:/var/run/docker.sock"]}}`), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := DefaultEngine().Assess(Context{Application: application.SourceApplication{ID: uuid.New(), Inventory: application.Inventory{Compose: &inv}}})
+	if result.BlockerCount != 1 {
+		t.Fatalf("socket dependency not blocked: %+v", result)
+	}
+	found := false
+	for _, issue := range result.Issues {
+		if issue.RuleID == "COMPOSE_RUNTIME_DEPENDENCY" && issue.Severity == domainassessment.SeverityBlocker {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("runtime blocker missing")
+	}
+}
 
 func TestExtendedRulesCoverStorageNetworkSecurityAndImages(t *testing.T) {
 	app := application.SourceApplication{ID: uuid.New(), Inventory: application.Inventory{

@@ -391,7 +391,7 @@ func kopiaSnapshotCommand(spec KopiaSnapshotSpec) (string, error) {
 		"kopia snapshot create /data --json --tags=" + shellQuote("migrationRun:"+spec.RunID) + " --tags=" + shellQuote("volume:"+spec.Source.Name)
 	identity := fmt.Sprintf("%x", sha256.Sum256([]byte(spec.RunID+"\x00"+spec.Phase+"\x00"+spec.Source.Name+"\x00"+spec.Source.Path)))
 	containerName := "smc-kopia-" + identity[:40]
-	run := "docker run -d --name " + shellQuote(containerName) + " --label migration.smartx.com/operation=" + shellQuote(identity) + " --user 0:0 --entrypoint /bin/sh" +
+	run := "docker run -d --network \"$network\" --name " + shellQuote(containerName) + " --label migration.smartx.com/operation=" + shellQuote(identity) + " --user 0:0 --entrypoint /bin/sh" +
 		" -e KOPIA_PASSWORD=" + shellQuote(repository.Password) +
 		" -e AWS_ACCESS_KEY_ID=" + shellQuote(repository.AccessKey) +
 		" -e AWS_SECRET_ACCESS_KEY=" + shellQuote(repository.SecretKey) +
@@ -399,10 +399,14 @@ func kopiaSnapshotCommand(spec KopiaSnapshotSpec) (string, error) {
 		" -v " + shellQuote(mount) + " " + shellQuote(repository.Image) + " -ec " + shellQuote(inner)
 	// A worker restart must reconnect to the existing helper rather than
 	// launch a second snapshot or fail with a container-name conflict.
-	return "set -eu; name=" + shellQuote(containerName) + "; " +
+	// Some Compose hosts retain working project networks after their default
+	// docker0 bridge was removed. Only the backup helper falls back to Linux
+	// host networking; do not repair/change Docker global or application networks.
+	return "set -eu; network=bridge; bridge=$(docker network inspect bridge --format '{{index .Options \"com.docker.network.bridge.name\"}}' 2>/dev/null || true); " +
+		"if test -z \"$bridge\"; then bridge=docker0; fi; if test ! -d \"/sys/class/net/$bridge\"; then network=host; fi; name=" + shellQuote(containerName) + "; " +
 		"if docker container inspect \"$name\" >/dev/null 2>&1; then " +
 		"test \"$(docker inspect --format '{{index .Config.Labels \"migration.smartx.com/operation\"}}' \"$name\")\" = " + shellQuote(identity) + "; " +
-		"id=$name; else id=$(" + run + "); fi; " +
+		"if test \"$(docker inspect --format '{{.State.Status}}' \"$name\")\" = created; then docker rm \"$name\" >/dev/null; id=$(" + run + "); else id=$name; fi; else id=$(" + run + "); fi; " +
 		"code=$(docker wait \"$id\"); docker logs \"$id\"; docker rm \"$id\" >/dev/null; test \"$code\" = 0", nil
 }
 

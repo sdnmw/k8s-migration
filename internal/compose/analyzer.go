@@ -74,6 +74,13 @@ func (a *Analyzer) Analyze(ctx context.Context, projectName string, composeYAML,
 		return application.ComposeInventory{}, fmt.Errorf("%w: %v", ErrInvalidCompose, err)
 	}
 	result := inventory(project)
+	if adapted, runtimeErr := prepareProjectRuntime(project, composeYAML); runtimeErr != nil {
+		result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_RUNTIME_UNSUPPORTED", Message: runtimeErr.Error()})
+	} else {
+		for _, proxy := range adapted.Proxies {
+			result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_RUNTIME_ADAPTED", Service: proxy.Service, Message: "目标端将 Traefik Docker provider 转为文件路由并连接 Kubernetes Service；socket 不参与备份，源配置保持不变，切流仍需保持原 Host/域名"})
+		}
+	}
 	if len(unresolvedVariables) > 0 {
 		preserveVariableReferences(composeYAML, &result)
 		result.Warnings = append(result.Warnings, application.ComposeWarning{
@@ -226,7 +233,7 @@ func inventory(project *composetypes.Project) application.ComposeInventory {
 		}
 		for _, mount := range service.Volumes {
 			summary.Mounts = append(summary.Mounts, application.ComposeMount{Type: mount.Type, Source: mount.Source, Target: mount.Target, ReadOnly: mount.ReadOnly})
-			if mount.Type == composetypes.VolumeTypeBind {
+			if mount.Type == composetypes.VolumeTypeBind && !IsRuntimeSocket(mount.Source, mount.Target) {
 				result.Warnings = append(result.Warnings, application.ComposeWarning{Code: "COMPOSE_BIND_MOUNT", Service: name, Message: "bind mount 需要配置允许目录并执行文件迁移"})
 			}
 		}

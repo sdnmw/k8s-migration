@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	composeanalyzer "github.com/smartx/sks-migration-center/internal/compose"
 	"github.com/smartx/sks-migration-center/internal/domain/migration"
 )
 
@@ -191,6 +193,20 @@ func TestRunnerRetriesFailedJob(t *testing.T) {
 	}
 	if observer.step != string(migration.StepRestore) || observer.outcome != "retry" {
 		t.Fatalf("unexpected observation: %+v", observer)
+	}
+}
+
+func TestRunnerDoesNotRetryPermanentRuntimeDependency(t *testing.T) {
+	store := &fakeJobStore{lease: &migration.Lease{ID: uuid.New(), StepType: migration.StepPreflight, Attempt: 1}}
+	runner, err := NewRunner(testConfig(), store, map[migration.StepType]Handler{migration.StepPreflight: HandlerFunc(func(context.Context, migration.Lease) error {
+		return fmt.Errorf("preflight: %w", &composeanalyzer.RuntimeDependencyError{Service: "app", Reason: "Docker socket"})
+	})}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	processed, err := runner.processOne(context.Background())
+	if err != nil || !processed || !store.failed || store.retried {
+		t.Fatalf("permanent failure was retried: %+v %v", store, err)
 	}
 }
 
